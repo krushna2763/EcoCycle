@@ -30,7 +30,7 @@ const DEMO_LISTING = {
 }
 
 export default function ListingDetails() {
-  const { id } = useParams({ from: '/buyer/dashboard/listings/$id' })
+  const { id } = useParams({ strict: false })
   const navigate = useNavigate()
 
   const [listing, setListing] = useState(null)
