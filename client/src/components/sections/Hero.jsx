@@ -1,4 +1,5 @@
 import { Check, Leaf, Lock, Recycle, ShoppingBag, Store } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import ImageWithFallback from '../common/ImageWithFallback'
 import heroImg from '../../assets/hero-recycling.jpg'
 
@@ -33,8 +34,8 @@ export default function Hero() {
 
           {/* CTAs */}
           <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-            <button
-              type="button"
+            <Link
+              to="/register-seller"
               className="flex items-center gap-3 rounded-2xl bg-brand-deep px-6 py-4 text-left shadow-lg shadow-brand-deep/25 transition-colors hover:bg-brand-deeper"
             >
               <Store className="h-5 w-5 shrink-0 text-white" strokeWidth={2} />
@@ -46,7 +47,7 @@ export default function Hero() {
                   I want to sell waste
                 </span>
               </span>
-            </button>
+            </Link>
 
             <button
               type="button"

@@ -1,4 +1,5 @@
 import { ArrowRight, CheckCircle2, Recycle, UserRound } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import ImageWithFallback from '../common/ImageWithFallback'
 import sellerImg from '../../assets/seller.jpg'
 import buyerImg from '../../assets/buyer.jpg'
@@ -39,17 +40,17 @@ export default function SellerBuyerCards() {
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
+            <Link
+              to="/register-seller"
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-deep px-6 py-3 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-brand-deeper"
             >
               Register as Seller
               <ArrowRight className="h-4 w-4" />
-            </button>
+            </Link>
           </div>
 
-          <div className="hidden w-52 shrink-0 sm:block">
-            <div className="aspect-[1008/800] w-52 overflow-hidden rounded-2xl">
+          <div className="hidden shrink-0 self-stretch sm:block">
+            <div className="h-full w-72 overflow-hidden rounded-2xl">
               <ImageWithFallback
                 src={sellerImg}
                 alt="Seller holding a recycling bin filled with bottles"
@@ -94,8 +95,8 @@ export default function SellerBuyerCards() {
             </button>
           </div>
 
-          <div className="hidden w-52 shrink-0 sm:block">
-            <div className="aspect-[1008/800] w-52 overflow-hidden rounded-2xl">
+          <div className="hidden shrink-0 self-stretch sm:block">
+            <div className="h-full w-72 overflow-hidden rounded-2xl">
               <ImageWithFallback
                 src={buyerImg}
                 alt="Buyer with a clipboard next to stacked boxes and bottles"

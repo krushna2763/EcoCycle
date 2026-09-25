@@ -38,14 +38,14 @@ export default function ProcessCta() {
         {/* Buttons */}
         <div className="flex flex-col items-center gap-3">
           <Link
-            to="/signup"
+            to="/register-seller"
             className="rounded-xl bg-white px-6 py-3 text-[15px] font-semibold text-brand-deep shadow-sm transition-colors hover:bg-brand-50"
           >
             Register as a Seller
           </Link>
           <span className="text-sm text-white/80">or</span>
           <Link
-            to="/signup"
+            to="/register-seller"
             className="rounded-xl border-2 border-white px-6 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-white/10"
           >
             Register as a Buyer

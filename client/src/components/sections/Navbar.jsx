@@ -1,7 +1,6 @@
-import { useState } from 'react'
-import { Link } from '@tanstack/react-router'
-import { Menu, X } from 'lucide-react'
-import Logo from '../common/Logo'
+import { useEffect, useState } from 'react'
+import { Link, useMatchRoute } from '@tanstack/react-router'
+import { Leaf, Menu, Recycle, ShoppingCart, Store, X } from 'lucide-react'
 
 const NAV_LINKS = [
   { label: 'Home', to: '/' },
@@ -14,80 +13,150 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+  const matchRoute = useMatchRoute()
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-100 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-20 max-w-app items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
-        <Logo />
+    <header className="fixed left-0 right-0 top-0 z-50 px-4 pt-3 sm:px-6 lg:px-12 xl:px-20">
+      {/* ── Desktop navbar ── */}
+      <div
+        className={`mx-auto hidden max-w-app items-center justify-between gap-4 rounded-2xl border border-white/60 bg-white/80 px-5 shadow-lg shadow-slate-900/5 backdrop-blur-xl transition-all duration-300 lg:flex ${
+          scrolled ? 'h-14' : 'h-[4.25rem]'
+        }`}
+      >
+        {/* Logo */}
+        <Link to="/" className="flex shrink-0 items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 shadow-sm">
+            <Recycle className="h-[18px] w-[18px] text-white" strokeWidth={2.5} />
+          </span>
+          <span className="text-xl font-bold tracking-tight text-brand-800">
+            EcoCycle
+          </span>
+        </Link>
 
-        <nav className="hidden items-center gap-8 lg:flex">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              activeOptions={{ exact: link.to === '/' }}
-              activeProps={{
-                className: 'border-brand-600 font-semibold text-brand-700',
-              }}
-              className="border-b-2 border-transparent pb-1 text-[15px] font-medium text-slate-600 transition-colors hover:text-brand-700"
-            >
-              {link.label}
-            </Link>
-          ))}
+        {/* Pill navigation */}
+        <nav className="flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-100/60 px-2 py-1.5">
+          {NAV_LINKS.map((link) => {
+            const isActive = matchRoute({
+              to: link.to,
+              fuzzy: link.to !== '/',
+            })
+            return (
+              <Link
+                key={link.to}
+                to={link.to}
+                activeOptions={{ exact: link.to === '/' }}
+                className={`relative rounded-full px-5 py-1.5 text-[13px] font-medium transition-all duration-200 ${
+                  isActive
+                    ? 'bg-brand-100 text-brand-700 shadow-sm'
+                    : 'text-slate-600 hover:text-brand-700'
+                }`}
+              >
+                {link.label}
+                {isActive && (
+                  <Leaf
+                    className="absolute -right-0.5 -top-0.5 h-3 w-3 text-brand-400 opacity-60"
+                    strokeWidth={2.5}
+                  />
+                )}
+              </Link>
+            )
+          })}
         </nav>
 
-        <div className="hidden items-center gap-3 lg:flex">
+        {/* Auth buttons */}
+        <div className="flex shrink-0 items-center gap-2.5">
           <Link
             to="/login"
-            className="rounded-xl border border-brand-600 px-5 py-2.5 text-[15px] font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+            className="rounded-full border border-slate-300 bg-white px-5 py-2 text-[13px] font-semibold text-slate-700 transition-all hover:border-brand-400 hover:text-brand-700"
           >
             Log In
           </Link>
           <Link
             to="/signup"
-            className="rounded-xl bg-brand-deep px-5 py-2.5 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-brand-deeper"
+            className="rounded-full bg-brand-deep px-5 py-2 text-[13px] font-semibold text-white shadow-md shadow-brand-deep/20 transition-all hover:bg-brand-deeper hover:shadow-lg"
           >
             Sign Up
           </Link>
         </div>
+      </div>
+
+      {/* ── Mobile navbar ── */}
+      <div
+        className={`flex items-center justify-between rounded-2xl border border-white/60 bg-white/80 px-4 shadow-lg shadow-slate-900/5 backdrop-blur-xl transition-all duration-300 lg:hidden ${
+          scrolled ? 'h-14' : 'h-16'
+        }`}
+      >
+        <Link to="/" className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 shadow-sm">
+            <Recycle className="h-4 w-4 text-white" strokeWidth={2.5} />
+          </span>
+          <span className="text-lg font-bold tracking-tight text-brand-800">
+            EcoCycle
+          </span>
+        </Link>
 
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
-          className="rounded-lg p-2 text-slate-700 hover:bg-slate-100 lg:hidden"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-brand-50 hover:text-brand-700"
           aria-label="Toggle navigation menu"
           aria-expanded={open}
         >
-          {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
+      {/* ── Mobile dropdown ── */}
       {open && (
-        <div className="border-t border-slate-100 bg-white px-4 pb-6 pt-3 lg:hidden">
+        <div className="mx-auto mt-2 max-w-app overflow-hidden rounded-2xl border border-white/60 bg-white/95 p-4 shadow-xl shadow-slate-900/10 backdrop-blur-xl lg:hidden">
           <nav className="flex flex-col gap-1">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                onClick={() => setOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-brand-50 hover:text-brand-700"
-              >
-                {link.label}
-              </Link>
-            ))}
+            {NAV_LINKS.map((link) => {
+              const isActive = matchRoute({
+                to: link.to,
+                fuzzy: link.to !== '/',
+              })
+              return (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  onClick={() => setOpen(false)}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-3 text-[15px] font-medium transition-all ${
+                    isActive
+                      ? 'bg-brand-100 text-brand-700 shadow-sm'
+                      : 'text-slate-600 hover:bg-brand-50 hover:text-brand-700'
+                  }`}
+                >
+                  {isActive && (
+                    <Leaf
+                      className="h-4 w-4 text-brand-500"
+                      strokeWidth={2.5}
+                    />
+                  )}
+                  {link.label}
+                </Link>
+              )
+            })}
           </nav>
-          <div className="mt-4 flex flex-col gap-3">
+
+          <div className="mt-4 flex flex-col gap-2.5 border-t border-slate-100 pt-4">
             <Link
               to="/login"
               onClick={() => setOpen(false)}
-              className="rounded-xl border border-brand-600 px-5 py-2.5 text-center text-[15px] font-semibold text-brand-700"
+              className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-center text-[15px] font-semibold text-slate-700 transition-colors hover:border-brand-400 hover:text-brand-700"
             >
               Log In
             </Link>
             <Link
               to="/signup"
               onClick={() => setOpen(false)}
-              className="rounded-xl bg-brand-deep px-5 py-2.5 text-center text-[15px] font-semibold text-white"
+              className="rounded-xl bg-brand-deep px-5 py-3 text-center text-[15px] font-semibold text-white shadow-md shadow-brand-deep/20 transition-colors hover:bg-brand-deeper"
             >
               Sign Up
             </Link>

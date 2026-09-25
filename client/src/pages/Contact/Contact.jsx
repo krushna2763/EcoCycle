@@ -1,5 +1,13 @@
-import ComingSoon from '../../components/common/ComingSoon'
+import ContactHero from '../../components/sections/ContactHero'
+import ContactForm from '../../components/sections/ContactForm'
+import ContactFAQ from '../../components/sections/ContactFAQ'
 
 export default function Contact() {
-  return <ComingSoon title="Contact" />
+  return (
+    <>
+      <ContactHero />
+      <ContactForm />
+      <ContactFAQ />
+    </>
+  )
 }

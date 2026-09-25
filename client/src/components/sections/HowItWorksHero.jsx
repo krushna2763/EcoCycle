@@ -1,6 +1,6 @@
 import { Leaf, Recycle } from 'lucide-react'
 import ImageWithFallback from '../common/ImageWithFallback'
-import heroImg from '../../assets/hero-image-howItWorkPage.png'
+import heroImg from '../../assets/impact/hero.png'
 
 export default function HowItWorksHero() {
   return (

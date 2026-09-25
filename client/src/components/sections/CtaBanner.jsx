@@ -34,7 +34,7 @@ export default function CtaBanner() {
         {/* Buttons */}
         <div className="flex flex-col items-center gap-2">
           <Link
-            to="/signup"
+            to="/register-seller"
             className="rounded-xl bg-white px-6 py-3 text-[15px] font-semibold text-brand-deep shadow-sm transition-colors hover:bg-brand-50"
           >
             Register as Seller

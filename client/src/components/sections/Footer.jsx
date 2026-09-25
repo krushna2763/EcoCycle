@@ -17,7 +17,7 @@ const QUICK_LINKS = [
 ]
 
 const SELLER_LINKS = [
-  { label: 'Register as Seller', to: '/signup' },
+  { label: 'Register as Seller', to: '/register-seller' },
   { label: 'Seller Guidelines', href: '#' },
   { label: 'Pricing Guide', href: '#' },
   { label: 'Help Center', href: '#' },
@@ -26,6 +26,8 @@ const SELLER_LINKS = [
 const BUYER_LINKS = [
   { label: 'Register as Buyer', to: '/signup' },
   { label: 'How to Buy', href: '#' },
+  { label: 'Bulk Solutions', href: '#' },
+  { label: 'Partner With Us', href: '#' },
 ]
 
 const SOCIALS = [
