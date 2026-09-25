@@ -63,7 +63,8 @@ export const createListing = async (req, res) => {
 export const getRequests = async (req, res) => {
   try {
     const requests = await Request.find({ seller: req.seller._id })
-      .populate('listing', 'title plasticType')
+      .populate('listing', 'title plasticType quantity pricePerKg location')
+      .populate('buyer', 'fullName phone email businessName city')
       .sort({ createdAt: -1 })
     res.json({ success: true, requests })
   } catch (error) {
@@ -80,6 +81,7 @@ export const acceptRequest = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Request not found' })
     }
     request.status = 'accepted'
+    request.updatedAt = new Date()
     await request.save()
     res.json({ success: true, request })
   } catch (error) {
@@ -91,13 +93,59 @@ export const acceptRequest = async (req, res) => {
 // @route   PUT /api/seller/requests/:id/reject
 export const rejectRequest = async (req, res) => {
   try {
+    const { reason } = req.body
     const request = await Request.findOne({ _id: req.params.id, seller: req.seller._id })
     if (!request) {
       return res.status(404).json({ success: false, message: 'Request not found' })
     }
     request.status = 'rejected'
+    if (reason) request.rejectionReason = reason
+    request.updatedAt = new Date()
     await request.save()
     res.json({ success: true, request })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// @desc    Schedule a collection for accepted request
+// @route   PUT /api/seller/requests/:id/schedule
+export const scheduleCollection = async (req, res) => {
+  try {
+    const { scheduledDate, scheduledTime, scheduledLocation } = req.body
+    const request = await Request.findOne({ _id: req.params.id, seller: req.seller._id })
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Request not found' })
+    }
+    request.status = 'scheduled'
+    request.scheduledDate = scheduledDate || request.scheduledDate
+    request.scheduledTime = scheduledTime || request.scheduledTime
+    request.scheduledLocation = scheduledLocation || request.scheduledLocation || req.seller.pickupAddress
+    request.updatedAt = new Date()
+    await request.save()
+    res.json({ success: true, request })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// @desc    Update collection status (in_progress, completed, cancelled)
+// @route   PUT /api/seller/requests/:id/status
+export const updateRequestStatus = async (req, res) => {
+  try {
+    const { status, reason } = req.body
+    const request = await Request.findOne({ _id: req.params.id, seller: req.seller._id })
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Request not found' })
+    }
+    if (['accepted', 'scheduled', 'in_progress', 'completed', 'cancelled', 'rejected'].includes(status)) {
+      request.status = status
+      if (reason && status === 'cancelled') request.cancellationReason = reason
+      request.updatedAt = new Date()
+      await request.save()
+      return res.json({ success: true, request })
+    }
+    res.status(400).json({ success: false, message: 'Invalid status' })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }

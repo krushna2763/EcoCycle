@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import { Outlet } from '@tanstack/react-router'
-import DashboardSidebar from '../components/seller-dashboard/Sidebar'
-import DashboardTopNavbar from '../components/seller-dashboard/TopNavbar'
+import BuyerSidebar from '../components/buyer-dashboard/BuyerSidebar'
+import BuyerTopNavbar from '../components/buyer-dashboard/BuyerTopNavbar'
 import ProtectedRoute from '../components/common/ProtectedRoute'
 
-export default function DashboardLayout() {
+export default function BuyerDashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const seller = JSON.parse(localStorage.getItem('sellerData') || '{}')
+  const buyer = JSON.parse(localStorage.getItem('sellerData') || '{}')
 
   return (
-    <ProtectedRoute requiredRole="seller">
+    <ProtectedRoute requiredRole="buyer">
       <div className="flex h-screen overflow-hidden bg-[#f8faf8]">
-        <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <BuyerSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <DashboardTopNavbar onMenuClick={() => setSidebarOpen(true)} seller={seller} />
+          <BuyerTopNavbar onMenuClick={() => setSidebarOpen(true)} buyer={buyer} />
           <main className="flex-1 overflow-y-auto">
             <Outlet />
           </main>

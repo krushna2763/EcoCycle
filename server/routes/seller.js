@@ -7,6 +7,8 @@ import {
   getRequests,
   acceptRequest,
   rejectRequest,
+  scheduleCollection,
+  updateRequestStatus,
 } from '../controllers/sellerController.js'
 import { listingValidation } from '../middleware/validate.js'
 
@@ -18,5 +20,7 @@ router.post('/listings', protect, listingValidation, createListing)
 router.get('/requests', protect, getRequests)
 router.put('/requests/:id/accept', protect, acceptRequest)
 router.put('/requests/:id/reject', protect, rejectRequest)
+router.put('/requests/:id/schedule', protect, scheduleCollection)
+router.put('/requests/:id/status', protect, updateRequestStatus)
 
 export default router

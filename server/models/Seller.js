@@ -40,7 +40,7 @@ const sellerSchema = new mongoose.Schema({
 
   // Dashboard data
   avatar: String,
-  role: { type: String, default: 'seller' },
+  role: { type: String, enum: ['seller', 'buyer', 'admin'], default: 'seller' },
 
   createdAt: { type: Date, default: Date.now },
 })

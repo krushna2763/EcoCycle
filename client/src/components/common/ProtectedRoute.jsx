@@ -1,8 +1,8 @@
 import { Navigate } from '@tanstack/react-router'
 import { useAuth } from '../../context/AuthContext'
 
-export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth()
+export default function ProtectedRoute({ children, requiredRole }) {
+  const { isAuthenticated, loading, seller } = useAuth()
 
   if (loading) {
     return (
@@ -14,6 +14,15 @@ export default function ProtectedRoute({ children }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
+  }
+
+  if (requiredRole && seller?.role && seller.role !== requiredRole) {
+    // If buyer attempts to access seller dashboard, redirect to buyer dashboard
+    if (seller.role === 'buyer') {
+      return <Navigate to="/buyer/dashboard" replace />
+    }
+    // If seller attempts to access buyer dashboard, redirect to seller dashboard
+    return <Navigate to="/seller/dashboard" replace />
   }
 
   return children

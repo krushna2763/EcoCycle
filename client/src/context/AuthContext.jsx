@@ -25,6 +25,7 @@ export function AuthProvider({ children }) {
         if (res.ok) {
           const data = await res.json()
           setSeller(data.seller)
+          localStorage.setItem('sellerData', JSON.stringify(data.seller))
         } else {
           // Token invalid, clear it
           localStorage.removeItem('sellerToken')
@@ -103,6 +104,9 @@ export function AuthProvider({ children }) {
     localStorage.setItem('sellerData', JSON.stringify(updated))
   }
 
+  const isBuyer = seller?.role === 'buyer'
+  const isSeller = !seller?.role || seller?.role === 'seller'
+
   return (
     <AuthContext.Provider
       value={{
@@ -110,6 +114,8 @@ export function AuthProvider({ children }) {
         token,
         loading,
         isAuthenticated: !!token && !!seller,
+        isBuyer,
+        isSeller,
         login,
         register,
         logout,

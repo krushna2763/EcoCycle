@@ -10,6 +10,7 @@ import connectDB from './config/db.js'
 import errorHandler from './middleware/errorHandler.js'
 import authRoutes from './routes/auth.js'
 import sellerRoutes from './routes/seller.js'
+import buyerRoutes from './routes/buyer.js'
 import messageRoutes from './routes/messages.js'
 import settingsRoutes from './routes/settings.js'
 
@@ -53,6 +54,7 @@ connectDB()
 // Routes
 app.use('/api/auth', authRoutes)
 app.use('/api/seller', sellerRoutes)
+app.use('/api/buyer', buyerRoutes)
 app.use('/api/messages', messageRoutes)
 app.use('/api/seller/settings', settingsRoutes)
 

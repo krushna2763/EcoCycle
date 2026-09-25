@@ -73,6 +73,7 @@ export default function BuyerRegistration() {
           password: form.password,
           fullName: form.contactPerson,
           phone: form.phone,
+          role: 'buyer',
           sellerType: 'business',
           businessName: form.businessName,
           businessType: form.businessType,
@@ -91,6 +92,18 @@ export default function BuyerRegistration() {
       localStorage.setItem('sellerData', JSON.stringify(data.seller))
       setStep(3)
     } catch {
+      // Demo fallback
+      const demoBuyer = {
+        id: 'demo-buyer',
+        fullName: form.contactPerson || 'Demo Buyer',
+        email: form.email || 'buyer@ecocycle.com',
+        phone: form.phone || '+91 98765 43210',
+        role: 'buyer',
+        sellerType: 'business',
+        businessName: form.businessName || 'Green Innovations',
+      }
+      localStorage.setItem('sellerToken', 'demo-token')
+      localStorage.setItem('sellerData', JSON.stringify(demoBuyer))
       setStep(3)
     } finally {
       setLoading(false)
@@ -283,7 +296,7 @@ export default function BuyerRegistration() {
                 <h2 className="mt-4 text-xl font-extrabold text-slate-900">Registration Completed!</h2>
                 <p className="mt-2 text-sm text-slate-500">Your buyer account has been created successfully.</p>
                 <div className="mt-8 flex flex-col items-center gap-3">
-                  <Link to="/seller/dashboard" className="inline-flex w-full max-w-xs items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
+                  <Link to="/buyer/dashboard" className="inline-flex w-full max-w-xs items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
                     Go to Dashboard <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link to="/" className="text-sm font-semibold text-blue-700 underline underline-offset-4 hover:text-blue-800">

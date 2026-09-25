@@ -70,14 +70,19 @@ export default function Login() {
       localStorage.setItem('sellerToken', data.token)
       localStorage.setItem('sellerData', JSON.stringify(data.seller))
 
-      // Redirect to dashboard
-      navigate({ to: '/seller/dashboard' })
+      // Role-based redirect to dashboard
+      if (data.seller?.role === 'buyer') {
+        navigate({ to: '/buyer/dashboard' })
+      } else {
+        navigate({ to: '/seller/dashboard' })
+      }
     } catch {
       // If API is not available, use demo login
       const demoSeller = {
         id: 'demo',
         fullName: 'Krushna Bhagawat',
         email: form.email || 'krushna@ecocycle.com',
+        role: isIndividual ? 'seller' : 'seller',
         sellerType: isIndividual ? 'individual' : 'business',
       }
       localStorage.setItem('sellerToken', 'demo-token')

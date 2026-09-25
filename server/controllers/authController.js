@@ -1,12 +1,12 @@
 import Seller from '../models/Seller.js'
 import { generateToken } from '../middleware/auth.js'
 
-// @desc    Register a new seller
+// @desc    Register a new seller or buyer
 // @route   POST /api/auth/register
 export const register = async (req, res) => {
   try {
     const {
-      email, password, fullName, phone, sellerType,
+      email, password, fullName, phone, sellerType, role,
       // Individual fields
       city, pincode, pickupAddress, plasticTypes, collectionSource, averageQuantity, additionalNotes,
       // Business fields
@@ -14,18 +14,30 @@ export const register = async (req, res) => {
       numberOfEmployees, businessAddress, businessCity, businessPincode, businessDescription,
     } = req.body
 
-    // Check if seller already exists
+    // Check if user already exists
     const existingSeller = await Seller.findOne({ email })
     if (existingSeller) {
       return res.status(400).json({ success: false, message: 'Email already registered' })
     }
 
-    // Create seller
+    // Determine account role (default to 'seller', allow 'buyer')
+    const accountRole = role === 'buyer' ? 'buyer' : 'seller'
+
+    // Create user
     const seller = await Seller.create({
-      email, password, fullName, phone, sellerType,
-      city, pincode, pickupAddress, plasticTypes, collectionSource, averageQuantity, additionalNotes,
+      email, password, fullName, phone,
+      sellerType: sellerType || (accountRole === 'buyer' ? 'business' : 'individual'),
+      role: accountRole,
+      city: city || businessCity,
+      pincode: pincode || businessPincode,
+      pickupAddress: pickupAddress || businessAddress,
+      plasticTypes, collectionSource, averageQuantity, additionalNotes,
       businessName, businessType, gstNumber, panNumber, yearOfEstablishment,
-      numberOfEmployees, businessAddress, businessCity, businessPincode, businessDescription,
+      numberOfEmployees,
+      businessAddress: businessAddress || pickupAddress,
+      businessCity: businessCity || city,
+      businessPincode: businessPincode || pincode,
+      businessDescription,
     })
 
     const token = generateToken(seller._id)
@@ -38,7 +50,11 @@ export const register = async (req, res) => {
         fullName: seller.fullName,
         email: seller.email,
         phone: seller.phone,
+        role: seller.role,
         sellerType: seller.sellerType,
+        businessName: seller.businessName,
+        city: seller.city,
+        pincode: seller.pincode,
       },
     })
   } catch (error) {
@@ -47,7 +63,7 @@ export const register = async (req, res) => {
   }
 }
 
-// @desc    Login seller
+// @desc    Login user (seller or buyer)
 // @route   POST /api/auth/login
 export const login = async (req, res) => {
   try {
@@ -77,6 +93,7 @@ export const login = async (req, res) => {
         fullName: seller.fullName,
         email: seller.email,
         phone: seller.phone,
+        role: seller.role || 'seller',
         sellerType: seller.sellerType,
         city: seller.city,
         pincode: seller.pincode,
@@ -93,7 +110,7 @@ export const login = async (req, res) => {
   }
 }
 
-// @desc    Get current logged-in seller
+// @desc    Get current logged-in user
 // @route   GET /api/auth/me
 export const getMe = async (req, res) => {
   res.json({
@@ -103,6 +120,7 @@ export const getMe = async (req, res) => {
       fullName: req.seller.fullName,
       email: req.seller.email,
       phone: req.seller.phone,
+      role: req.seller.role || 'seller',
       sellerType: req.seller.sellerType,
       city: req.seller.city,
       pincode: req.seller.pincode,

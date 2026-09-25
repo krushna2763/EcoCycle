@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useMatchRoute } from '@tanstack/react-router'
-import { Leaf, Menu, Recycle, ShoppingCart, Store, X } from 'lucide-react'
+import { Leaf, Menu, Recycle, X } from 'lucide-react'
 
 const NAV_LINKS = [
   { label: 'Home', to: '/' },
@@ -23,13 +23,14 @@ export default function Navbar() {
   }, [])
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-50 px-4 pt-3 sm:px-6 lg:px-12 xl:px-20">
+    <header className="fixed left-0 right-0 top-0 z-50">
       {/* ── Desktop navbar ── */}
       <div
-        className={`mx-auto hidden max-w-app items-center justify-between gap-4 rounded-2xl border border-white/60 bg-white/80 px-5 shadow-lg shadow-slate-900/5 backdrop-blur-xl transition-all duration-300 lg:flex ${
+        className={`hidden w-full border-b border-slate-200/70 bg-white/80 shadow-lg shadow-slate-900/5 backdrop-blur-xl transition-all duration-300 lg:flex ${
           scrolled ? 'h-14' : 'h-[4.25rem]'
         }`}
       >
+        <div className="mx-auto flex w-full max-w-app items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link to="/" className="flex shrink-0 items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 shadow-sm">
@@ -85,11 +86,12 @@ export default function Navbar() {
             Sign Up
           </Link>
         </div>
+        </div>
       </div>
 
       {/* ── Mobile navbar ── */}
       <div
-        className={`flex items-center justify-between rounded-2xl border border-white/60 bg-white/80 px-4 shadow-lg shadow-slate-900/5 backdrop-blur-xl transition-all duration-300 lg:hidden ${
+        className={`flex w-full items-center justify-between border-b border-slate-200/70 bg-white/80 px-4 shadow-lg shadow-slate-900/5 backdrop-blur-xl transition-all duration-300 sm:px-6 lg:hidden ${
           scrolled ? 'h-14' : 'h-16'
         }`}
       >
@@ -115,7 +117,8 @@ export default function Navbar() {
 
       {/* ── Mobile dropdown ── */}
       {open && (
-        <div className="mx-auto mt-2 max-w-app overflow-hidden rounded-2xl border border-white/60 bg-white/95 p-4 shadow-xl shadow-slate-900/10 backdrop-blur-xl lg:hidden">
+        <div className="px-4 pt-2 sm:px-6 lg:hidden">
+        <div className="mx-auto max-w-app overflow-hidden rounded-2xl border border-white/60 bg-white/95 p-4 shadow-xl shadow-slate-900/10 backdrop-blur-xl">
           <nav className="flex flex-col gap-1">
             {NAV_LINKS.map((link) => {
               const isActive = matchRoute({
@@ -161,6 +164,7 @@ export default function Navbar() {
               Sign Up
             </Link>
           </div>
+        </div>
         </div>
       )}
     </header>
