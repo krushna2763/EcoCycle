@@ -1,8 +1,16 @@
 import Settings from '../models/Settings.js'
 
-// @desc    Get seller settings
-// @route   GET /api/seller/settings
-export const getSettings = async (req, res) => {
+// Nested preference groups the client may update key by key
+const NESTED_FIELDS = {
+  notifications: ['collectionUpdates', 'messages', 'requestUpdates', 'newListings', 'collectionReminders'],
+  channels: ['email', 'sms', 'push', 'marketing'],
+  privacy: ['profileVisibility', 'showContactInformation'],
+}
+const TOP_LEVEL_FIELDS = ['language', 'timezone', 'dateFormat', 'currency']
+
+// @desc    Get the user's settings (created with defaults on first read)
+// @route   GET /api/seller/settings, GET /api/buyer/settings
+export const getSettings = async (req, res, next) => {
   try {
     let settings = await Settings.findOne({ seller: req.seller._id })
     if (!settings) {
@@ -10,32 +18,35 @@ export const getSettings = async (req, res) => {
     }
     res.json({ success: true, settings })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    next(error)
   }
 }
 
-// @desc    Update seller settings
-// @route   PUT /api/seller/settings
-export const updateSettings = async (req, res) => {
+// @desc    Update the user's settings; only the keys sent are changed
+// @route   PUT /api/seller/settings, PUT /api/buyer/settings
+export const updateSettings = async (req, res, next) => {
   try {
-    const { language, timezone, dateFormat, notifications, privacy } = req.body
-
     const update = {}
-    if (language) update.language = language
-    if (timezone) update.timezone = timezone
-    if (dateFormat) update.dateFormat = dateFormat
-    if (notifications) update.notifications = notifications
-    if (privacy) update.privacy = privacy
+    for (const field of TOP_LEVEL_FIELDS) {
+      if (req.body[field]) update[field] = req.body[field]
+    }
+    for (const [group, keys] of Object.entries(NESTED_FIELDS)) {
+      const values = req.body[group]
+      if (!values || typeof values !== 'object') continue
+      for (const key of keys) {
+        if (values[key] !== undefined) update[`${group}.${key}`] = values[key]
+      }
+    }
     update.updatedAt = new Date()
 
-    let settings = await Settings.findOneAndUpdate(
+    const settings = await Settings.findOneAndUpdate(
       { seller: req.seller._id },
       { $set: update },
-      { new: true, upsert: true }
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
     )
 
     res.json({ success: true, settings })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    next(error)
   }
 }

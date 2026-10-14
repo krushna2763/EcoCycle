@@ -21,4 +21,7 @@ const listingSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 })
 
+listingSchema.index({ seller: 1, createdAt: -1 })
+listingSchema.index({ status: 1, quantity: 1, createdAt: -1 })
+
 export default mongoose.model('Listing', listingSchema)

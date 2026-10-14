@@ -21,10 +21,22 @@ const requestSchema = new mongoose.Schema({
   scheduledDate: String,
   scheduledTime: String,
   scheduledLocation: String,
+  scheduleNote: String,
   rejectionReason: String,
   cancellationReason: String,
+  cancelledBy: { type: String, enum: ['buyer', 'seller'] },
+  // Listing quantity held for this request since the seller accepted it
+  reservedQuantity: { type: Number, default: 0 },
+  acceptedAt: Date,
+  rejectedAt: Date,
+  completedAt: Date,
+  cancelledAt: Date,
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 })
+
+requestSchema.index({ seller: 1, createdAt: -1 })
+requestSchema.index({ buyer: 1, createdAt: -1 })
+requestSchema.index({ listing: 1, buyer: 1, status: 1 })
 
 export default mongoose.model('Request', requestSchema)

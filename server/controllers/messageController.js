@@ -1,66 +1,68 @@
 import Message from '../models/Message.js'
+import { getConversationAccess } from '../utils/conversations.js'
+import { createMessage, listConversations, markConversationRead } from '../utils/messages.js'
 
-// @desc    Get all conversations for seller
+const PAGE_SIZE = 50
+
+// @desc    Get the user's conversations (one per seller-buyer pair with a request)
 // @route   GET /api/messages/conversations
-export const getConversations = async (req, res) => {
+export const getConversations = async (req, res, next) => {
   try {
-    const messages = await Message.find({
-      $or: [{ sender: req.seller._id }, { receiverId: req.seller._id.toString() }],
-    }).sort({ createdAt: -1 })
-
-    // Group by conversationId and get last message
-    const conversationMap = {}
-    messages.forEach((msg) => {
-      if (!conversationMap[msg.conversationId]) {
-        conversationMap[msg.conversationId] = {
-          conversationId: msg.conversationId,
-          lastMessage: msg.text,
-          time: msg.createdAt,
-          sender: msg.sender,
-          senderName: msg.senderName,
-          receiverId: msg.receiverId,
-          receiverName: msg.receiverName,
-        }
-      }
-    })
-
-    res.json({ success: true, conversations: Object.values(conversationMap) })
+    res.json({ success: true, conversations: await listConversations(req.seller) })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    next(error)
   }
 }
 
-// @desc    Get messages for a conversation
+// @desc    Get messages for a conversation, newest page first (?before=<ISO date> for older pages)
 // @route   GET /api/messages/:conversationId
-export const getMessages = async (req, res) => {
+export const getMessages = async (req, res, next) => {
   try {
-    const messages = await Message.find({
-      conversationId: req.params.conversationId,
-    }).sort({ createdAt: 1 })
+    if (!getConversationAccess(req.params.conversationId, req.seller._id)) {
+      return res.status(403).json({ success: false, message: 'You do not have access to this conversation' })
+    }
 
-    res.json({ success: true, messages })
+    const before = typeof req.query.before === 'string' ? new Date(req.query.before) : null
+    const filter = {
+      conversationId: req.params.conversationId,
+      ...(before && !Number.isNaN(before.getTime()) && { createdAt: { $lt: before } }),
+    }
+
+    const page = await Message.find(filter).sort({ createdAt: -1 }).limit(PAGE_SIZE + 1)
+    const hasMore = page.length > PAGE_SIZE
+    const messages = page.slice(0, PAGE_SIZE).reverse()
+
+    res.json({ success: true, messages, hasMore })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    next(error)
   }
 }
 
 // @desc    Send a message
 // @route   POST /api/messages
-export const sendMessage = async (req, res) => {
+export const sendMessage = async (req, res, next) => {
   try {
-    const { conversationId, text, receiverId, receiverName } = req.body
-
-    const message = await Message.create({
-      conversationId,
-      sender: req.seller._id,
-      senderName: req.seller.fullName,
-      receiverId,
-      receiverName,
-      text,
-    })
-
-    res.status(201).json({ success: true, message })
+    const { conversationId, text, receiverId } = req.body
+    const result = await createMessage({ sender: req.seller, conversationId, text, receiverId })
+    if (!result.message) {
+      return res.status(result.status).json({ success: false, message: result.error })
+    }
+    res.status(201).json({ success: true, message: result.message })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    next(error)
+  }
+}
+
+// @desc    Mark received messages in a conversation as read
+// @route   PUT /api/messages/:conversationId/read
+export const markRead = async (req, res, next) => {
+  try {
+    const result = await markConversationRead(req.params.conversationId, req.seller)
+    if (!result) {
+      return res.status(403).json({ success: false, message: 'You do not have access to this conversation' })
+    }
+    res.json({ success: true, ...result })
+  } catch (error) {
+    next(error)
   }
 }

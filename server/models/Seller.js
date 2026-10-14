@@ -42,6 +42,9 @@ const sellerSchema = new mongoose.Schema({
   avatar: String,
   role: { type: String, enum: ['seller', 'buyer', 'admin'], default: 'seller' },
 
+  // Incremented on password change to revoke previously issued JWTs
+  tokenVersion: { type: Number, default: 0 },
+
   createdAt: { type: Date, default: Date.now },
 })
 
