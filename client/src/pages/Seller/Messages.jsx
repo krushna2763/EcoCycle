@@ -1,276 +1,259 @@
-import { useState, useRef, useEffect } from 'react'
-import { io } from 'socket.io-client'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Link, useSearch } from '@tanstack/react-router'
 import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
   CheckCheck,
-  Edit3,
-  Info,
-  Paperclip,
+  Clock,
+  Calendar,
+  MessageSquare,
   Search,
   Send,
-  Calendar,
 } from 'lucide-react'
+import api, { assetUrl } from '../../services/api'
+import { getSocket } from '../../services/socket'
+import { useAuth } from '../../context/AuthContext'
+import { useApi } from '../../hooks/useApi'
+import { useSocketEvent } from '../../hooks/useLiveUpdates'
+import { formatDate, formatTime, statusLabel, timeAgo } from '../../lib/format'
 
-const SOCKET_URL = 'http://localhost:5000'
+const AVATAR_BGS = ['bg-emerald-100', 'bg-brand-100', 'bg-blue-100', 'bg-violet-100', 'bg-amber-100']
+const TYPING_IDLE_MS = 3000
 
-const INITIAL_CONVERSATIONS = [
-  {
-    id: 1,
-    company: 'GreenCycle Pvt. Ltd.',
-    logo: '🌿',
-    logoBg: 'bg-emerald-100',
-    online: true,
-    lastMessage: 'Yes, we can collect it on 22 Aug at 11:00 AM.',
-    time: '10:30 AM',
-    unread: 2,
-    collectionId: 'COL-2026-0816-001',
-    messages: [
-      { id: 1, sender: 'them', text: 'Hello Krushna, I am interested in your PET Plastic Bottles (50 kg). Is it available for pickup?', time: '10:15 AM', date: '16 Aug 2026' },
-      { id: 2, sender: 'me', text: 'Yes, it is available. Please let me know when you can collect.', time: '10:17 AM', date: '16 Aug 2026' },
-      { id: 3, sender: 'them', text: 'We can collect it on 22 Aug 2026 around 11:00 AM. Is that okay with you?', time: '10:18 AM', date: '16 Aug 2026' },
-      { id: 4, sender: 'me', text: 'Yes, that works for me.', time: '10:19 AM', date: '16 Aug 2026' },
-      { id: 5, sender: 'them', text: 'Great! We will confirm the schedule shortly.', time: '10:20 AM', date: '16 Aug 2026' },
-      { id: 6, sender: 'them', text: 'We are on the way. We\'ll reach in around 20 minutes.', time: '10:40 AM', date: '22 Aug 2026' },
-      { id: 7, sender: 'me', text: 'Okay, I will be here.', time: '10:41 AM', date: '22 Aug 2026' },
-      { id: 8, sender: 'them', text: 'Thank you! We have collected the waste.', time: '11:15 AM', date: '22 Aug 2026' },
-      { id: 9, sender: 'me', text: 'Thank you! Please confirm once marked as completed.', time: '11:16 AM', date: '22 Aug 2026' },
-      { id: 10, sender: 'them', text: 'Yes, we have marked the collection as completed. Thank you!', time: '11:18 AM', date: '22 Aug 2026' },
-    ],
-  },
-  {
-    id: 2,
-    company: 'Eco Recyclers',
-    logo: '♻️',
-    logoBg: 'bg-brand-100',
-    online: true,
-    lastMessage: 'Thank you! We have marked the collection as completed.',
-    time: 'Yesterday',
-    unread: 1,
-    collectionId: 'COL-2026-0818-002',
-    messages: [
-      { id: 1, sender: 'them', text: 'Hi, we are interested in your HDPE Containers (25 kg).', time: '09:00 AM', date: '18 Aug 2026' },
-      { id: 2, sender: 'me', text: 'Sure, when can you pick up?', time: '09:05 AM', date: '18 Aug 2026' },
-      { id: 3, sender: 'them', text: 'We can schedule it for 20 Aug at 02:00 PM.', time: '09:10 AM', date: '18 Aug 2026' },
-      { id: 4, sender: 'me', text: 'That works. Thank you!', time: '09:12 AM', date: '18 Aug 2026' },
-      { id: 5, sender: 'them', text: 'Thank you! We have marked the collection as completed.', time: '03:00 PM', date: '20 Aug 2026' },
-    ],
-  },
-  {
-    id: 3,
-    company: 'ReUse Industries',
-    logo: '🏭',
-    logoBg: 'bg-blue-100',
-    online: false,
-    lastMessage: 'Can you please confirm the location?',
-    time: 'Yesterday',
-    unread: 0,
-    collectionId: 'COL-2026-0810-003',
-    messages: [
-      { id: 1, sender: 'them', text: 'Hello, we are interested in your Mixed Plastic (30 kg).', time: '11:00 AM', date: '10 Aug 2026' },
-      { id: 2, sender: 'me', text: 'Great, it\'s available at Viman Nagar.', time: '11:05 AM', date: '10 Aug 2026' },
-      { id: 3, sender: 'them', text: 'Can you please confirm the location?', time: '11:10 AM', date: '10 Aug 2026' },
-    ],
-  },
-  {
-    id: 4,
-    company: 'Planet Recycle Co.',
-    logo: '🌍',
-    logoBg: 'bg-violet-100',
-    online: false,
-    lastMessage: 'We have a requirement for more plastic waste.',
-    time: '2 Aug',
-    unread: 0,
-    collectionId: 'COL-2026-0801-004',
-    messages: [
-      { id: 1, sender: 'them', text: 'Hello, we have a requirement for more plastic waste.', time: '02:00 PM', date: '2 Aug 2026' },
-    ],
-  },
-  {
-    id: 5,
-    company: 'Waste Management Inc.',
-    logo: 'WM',
-    logoBg: 'bg-amber-100',
-    online: true,
-    lastMessage: 'We\'ll reach in 10 minutes.',
-    time: '1 Aug',
-    unread: 0,
-    collectionId: null,
-    messages: [
-      { id: 1, sender: 'them', text: 'We\'ll reach in 10 minutes.', time: '04:00 PM', date: '1 Aug 2026' },
-    ],
-  },
-  {
-    id: 6,
-    company: 'Clean Earth Solutions',
-    logo: '🌱',
-    logoBg: 'bg-emerald-100',
-    online: false,
-    lastMessage: 'Please share the pickup address.',
-    time: '31 Jul',
-    unread: 0,
-    collectionId: null,
-    messages: [
-      { id: 1, sender: 'them', text: 'Please share the pickup address.', time: '10:00 AM', date: '31 Jul 2026' },
-    ],
-  },
-  {
-    id: 7,
-    company: 'Recycle India',
-    logo: '♻️',
-    logoBg: 'bg-brand-100',
-    online: false,
-    lastMessage: 'Looking forward to working with you!',
-    time: '30 Jul',
-    unread: 0,
-    collectionId: null,
-    messages: [
-      { id: 1, sender: 'them', text: 'Looking forward to working with you!', time: '03:00 PM', date: '30 Jul 2026' },
-    ],
-  },
-]
+const sameId = (a, b) => String(a) === String(b)
+
+// Add a stored message once: it replaces its optimistic copy (by temp id, or the oldest pending
+// copy with the same text when the socket echo arrives before the POST response)
+const mergeMessage = (items, message, tempId) => {
+  let rest = items
+  if (tempId) {
+    rest = items.filter((m) => m._id !== tempId)
+  } else {
+    const pendingIndex = items.findIndex((m) => m.pending && m.text === message.text)
+    if (pendingIndex >= 0 && sameId(message.sender, items[pendingIndex].sender)) {
+      rest = items.filter((_, i) => i !== pendingIndex)
+    }
+  }
+  if (rest.some((m) => m._id === message._id)) return rest
+  return [...rest, message]
+}
+
+function Avatar({ conversation, index, size = 'h-11 w-11 text-lg' }) {
+  const src = assetUrl(conversation.participant.avatar)
+  if (src) return <img src={src} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
+  return (
+    <span className={`flex ${size} shrink-0 items-center justify-center rounded-full font-bold text-slate-700 ${AVATAR_BGS[index % AVATAR_BGS.length]}`}>
+      {conversation.participant.name.charAt(0)}
+    </span>
+  )
+}
 
 export default function Messages() {
-  const [conversations, setConversations] = useState(INITIAL_CONVERSATIONS)
-  const [activeId, setActiveId] = useState(1)
+  const { seller: me } = useAuth()
+  const myId = String(me?.id || me?._id || '')
+  const isBuyer = me?.role === 'buyer'
+  const base = isBuyer ? '/buyer/dashboard' : '/seller/dashboard'
+  const { c: requestedConversation } = useSearch({ strict: false })
+
+  const { data, loading, error, reload, setData } = useApi(() => api.getConversations(), [])
+  const conversations = data?.conversations || []
+  const [activeId, setActiveId] = useState(requestedConversation ? String(requestedConversation) : null)
+  // conversationId -> { items, hasMore } once loaded, or { error }
+  const [threads, setThreads] = useState({})
   const [input, setInput] = useState('')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('All Conversations')
-  const [socket, setSocket] = useState(null)
-  const [typing, setTyping] = useState(null)
+  const [typingIn, setTypingIn] = useState(null)
   const chatEndRef = useRef(null)
+  const typingTimer = useRef(null)
+  const lastTypingSent = useRef(0)
+  const activeIdRef = useRef(activeId)
 
-  const active = conversations.find((c) => c.id === activeId)
-  const seller = JSON.parse(localStorage.getItem('sellerData') || '{}')
+  const active = conversations.find((c) => c.conversationId === activeId)
+  const activeIndex = conversations.findIndex((c) => c.conversationId === activeId)
+  const thread = threads[activeId]
 
-  // Connect to Socket.io
   useEffect(() => {
-    const token = localStorage.getItem('sellerToken')
-    if (!token) return
+    activeIdRef.current = activeId
+  }, [activeId])
 
-    const newSocket = io(SOCKET_URL, {
-      auth: { token },
+  const updateConversation = useCallback((conversationId, update) => {
+    setData((prev) => prev && {
+      ...prev,
+      conversations: prev.conversations.map((c) => (c.conversationId === conversationId ? { ...c, ...update(c) } : c)),
     })
+  }, [setData])
 
-    newSocket.on('connect', () => {
-      console.log('Connected to chat server')
-    })
+  const markRead = useCallback((conversationId) => {
+    updateConversation(conversationId, () => ({ unread: 0 }))
+    api.markConversationRead(conversationId).catch(() => {})
+  }, [updateConversation])
 
-    newSocket.on('newMessage', (msg) => {
-      setConversations((prev) =>
-        prev.map((c) => {
-          if (c.id === activeId) {
-            const newMsg = {
-              id: c.messages.length + 1,
-              sender: 'them',
-              text: msg.text,
-              time: new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-              date: new Date(msg.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
-            }
-            return { ...c, messages: [...c.messages, newMsg], lastMessage: msg.text, time: 'Just now' }
-          }
-          return c
-        })
-      )
-    })
+  // Load the latest page of messages for a conversation
+  const loadThread = useCallback((conversationId) =>
+    api.getMessages(conversationId)
+      .then((res) => {
+        setThreads((prev) => ({ ...prev, [conversationId]: { items: res.messages, hasMore: res.hasMore } }))
+        markRead(conversationId)
+      })
+      .catch((err) => setThreads((prev) => ({ ...prev, [conversationId]: { ...prev[conversationId], error: err.message } }))),
+  [markRead])
 
-    newSocket.on('userTyping', (data) => {
-      setTyping(data.userName)
-      setTimeout(() => setTyping(null), 3000)
-    })
-
-    newSocket.on('userStopTyping', () => {
-      setTyping(null)
-    })
-
-    setSocket(newSocket)
-
-    return () => {
-      newSocket.disconnect()
-    }
-  }, [])
-
-  // Join/leave conversation rooms
   useEffect(() => {
-    if (!socket || !active) return
-
-    socket.emit('join', `conv-${active.id}`)
-
-    return () => {
-      socket.emit('leave', `conv-${active.id}`)
-    }
-  }, [socket, activeId])
-
-  const filteredConversations = conversations.filter((c) =>
-    c.company.toLowerCase().includes(search.toLowerCase())
-  )
+    if (!activeId || !active) return undefined
+    loadThread(activeId)
+    const socket = getSocket()
+    socket?.emit('join', activeId)
+    return () => socket?.emit('leave', activeId)
+    // Reload only when the selected conversation changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, Boolean(active)])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [active?.messages.length])
+  }, [thread?.items?.length, activeId])
+
+  useSocketEvent('newMessage', (message) => {
+    const { conversationId } = message
+    if (!conversations.some((c) => c.conversationId === conversationId)) {
+      reload()
+      return
+    }
+    const fromMe = sameId(message.sender, myId)
+    const isOpen = conversationId === activeIdRef.current
+    setThreads((prev) => (prev[conversationId]?.items
+      ? { ...prev, [conversationId]: { ...prev[conversationId], items: mergeMessage(prev[conversationId].items, message) } }
+      : prev))
+    updateConversation(conversationId, (c) => ({
+      lastMessage: message.text,
+      lastMessageFromMe: fromMe,
+      time: message.createdAt,
+      unread: !fromMe && !isOpen ? c.unread + 1 : c.unread,
+    }))
+    if (!fromMe && isOpen) markRead(conversationId)
+    if (!fromMe && isOpen) setTypingIn(null)
+  })
+
+  useSocketEvent('messagesRead', ({ conversationId }) => {
+    setThreads((prev) => (prev[conversationId]?.items
+      ? {
+          ...prev,
+          [conversationId]: {
+            ...prev[conversationId],
+            items: prev[conversationId].items.map((m) => (sameId(m.sender, myId) ? { ...m, read: true } : m)),
+          },
+        }
+      : prev))
+  })
+
+  useSocketEvent('presence', ({ userId, online }) => {
+    setData((prev) => prev && {
+      ...prev,
+      conversations: prev.conversations.map((c) => (c.participant.id === userId ? { ...c, online } : c)),
+    })
+  })
+
+  useSocketEvent('userTyping', ({ conversationId }) => {
+    setTypingIn(conversationId)
+    clearTimeout(typingTimer.current)
+    typingTimer.current = setTimeout(() => setTypingIn(null), TYPING_IDLE_MS)
+  })
+  useSocketEvent('userStopTyping', () => setTypingIn(null))
+
+  // After a reconnect, catch up on anything missed and rejoin the open room
+  useSocketEvent('connect', () => {
+    reload()
+    if (activeIdRef.current) {
+      getSocket()?.emit('join', activeIdRef.current)
+      loadThread(activeIdRef.current)
+    }
+  })
+
+  useEffect(() => () => clearTimeout(typingTimer.current), [])
+
+  const sendText = async (text, tempId) => {
+    if (!thread?.items) return
+    const conversationId = activeId
+    const temp = { _id: tempId, conversationId, sender: myId, text, createdAt: new Date().toISOString(), pending: true }
+    setThreads((prev) => ({
+      ...prev,
+      [conversationId]: { ...prev[conversationId], items: [...prev[conversationId].items.filter((m) => m._id !== tempId), temp] },
+    }))
+    try {
+      const { message } = await api.sendMessage({ conversationId, text })
+      setThreads((prev) => ({
+        ...prev,
+        [conversationId]: { ...prev[conversationId], items: mergeMessage(prev[conversationId].items, message, tempId) },
+      }))
+    } catch (err) {
+      setThreads((prev) => ({
+        ...prev,
+        [conversationId]: {
+          ...prev[conversationId],
+          items: prev[conversationId].items.map((m) => (m._id === tempId ? { ...m, pending: false, failed: err.message } : m)),
+        },
+      }))
+    }
+  }
 
   const handleSend = () => {
-    if (!input.trim() || !active) return
-
-    const now = new Date()
-    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    const dateStr = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-
-    const newMsg = {
-      id: active.messages.length + 1,
-      sender: 'me',
-      text: input.trim(),
-      time: timeStr,
-      date: dateStr,
-    }
-
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === activeId
-          ? { ...c, messages: [...c.messages, newMsg], lastMessage: newMsg.text, time: 'Just now' }
-          : c
-      )
-    )
-
-    // Emit via socket
-    if (socket) {
-      socket.emit('sendMessage', {
-        conversationId: `conv-${active.id}`,
-        text: input.trim(),
-        receiverId: active.company,
-        receiverName: active.company,
-        senderName: seller.fullName || 'Seller',
-      })
-
-      socket.emit('stopTyping', { conversationId: `conv-${active.id}` })
-    }
-
+    const text = input.trim()
+    if (!text || !active || !thread?.items) return
     setInput('')
+    getSocket()?.emit('stopTyping', { conversationId: activeId })
+    lastTypingSent.current = 0
+    sendText(text, `tmp-${Date.now()}`)
   }
 
   const handleTyping = () => {
-    if (socket && active) {
-      socket.emit('typing', {
-        conversationId: `conv-${active.id}`,
-        userName: seller.fullName || 'Seller',
-      })
+    const now = Date.now()
+    if (!activeId || now - lastTypingSent.current < 2000) return
+    lastTypingSent.current = now
+    getSocket()?.emit('typing', { conversationId: activeId })
+  }
+
+  const loadOlder = async () => {
+    const first = thread?.items.find((m) => !m.pending && !m.failed)
+    if (!first) return
+    try {
+      const res = await api.getMessages(activeId, first.createdAt)
+      setThreads((prev) => ({
+        ...prev,
+        [activeId]: { items: [...res.messages, ...prev[activeId].items], hasMore: res.hasMore },
+      }))
+    } catch (err) {
+      setThreads((prev) => ({ ...prev, [activeId]: { ...prev[activeId], error: err.message } }))
     }
   }
 
   const handleSelectConversation = (id) => {
     setActiveId(id)
-    setConversations((prev) => prev.map((c) => c.id === id ? { ...c, unread: 0 } : c))
+    setTypingIn(null)
   }
 
+  const filteredConversations = conversations.filter((c) => {
+    if (filter === 'Unread' && c.unread === 0) return false
+    const term = search.trim().toLowerCase()
+    return !term || c.participant.name.toLowerCase().includes(term) || c.request.listingTitle?.toLowerCase().includes(term)
+  })
+
   // Group messages by date
-  const groupedMessages = active?.messages.reduce((acc, msg) => {
-    if (!acc[msg.date]) acc[msg.date] = []
-    acc[msg.date].push(msg)
+  const groupedMessages = (thread?.items || []).reduce((acc, msg) => {
+    const date = formatDate(msg.createdAt)
+    if (!acc[date]) acc[date] = []
+    acc[date].push(msg)
     return acc
-  }, {}) || {}
+  }, {})
+
+  const requestLink = active && (['accepted', 'scheduled', 'in_progress', 'completed'].includes(active.request.status)
+    ? `${base}/collections`
+    : `${base}/requests`)
 
   return (
     <div className="flex h-[calc(100vh-4.5rem)]">
       {/* Conversation list */}
-      <div className="flex w-full flex-col border-r border-slate-200 bg-white sm:w-80 lg:w-96">
+      <div className={`${active ? 'hidden sm:flex' : 'flex'} w-full flex-col border-r border-slate-200 bg-white sm:w-80 lg:w-96`}>
         {/* Search + filter */}
         <div className="border-b border-slate-100 p-4">
           <div className="flex items-center gap-3">
@@ -278,7 +261,7 @@ export default function Messages() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search messages..."
+                placeholder="Search conversations..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none focus:border-brand-400 focus:bg-white"
@@ -291,38 +274,56 @@ export default function Messages() {
             >
               <option>All Conversations</option>
               <option>Unread</option>
-              <option>Archived</option>
             </select>
-            <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-deep text-white transition-colors hover:bg-brand-deeper">
-              <Edit3 className="h-4 w-4" />
-            </button>
           </div>
         </div>
 
         {/* Conversation items */}
         <div className="flex-1 overflow-y-auto">
+          {loading && !data && (
+            <div className="flex justify-center py-10">
+              <div className="h-6 w-6 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+            </div>
+          )}
+          {error && (
+            <div className="p-4 text-center text-xs text-red-600">
+              {error}
+              <button onClick={reload} className="mt-2 block w-full font-semibold underline">Try again</button>
+            </div>
+          )}
+          {data && filteredConversations.length === 0 && (
+            <div className="p-8 text-center">
+              <MessageSquare className="mx-auto h-10 w-10 text-slate-300" />
+              <p className="mt-2 text-sm text-slate-500">
+                {conversations.length === 0
+                  ? `Conversations start once ${isBuyer ? 'you send a request to a seller' : 'a buyer sends you a request'}.`
+                  : 'No conversations match.'}
+              </p>
+            </div>
+          )}
           {filteredConversations.map((conv) => (
             <button
-              key={conv.id}
-              onClick={() => handleSelectConversation(conv.id)}
+              key={conv.conversationId}
+              onClick={() => handleSelectConversation(conv.conversationId)}
               className={`flex w-full items-start gap-3 border-b border-slate-100 p-4 text-left transition-colors hover:bg-slate-50 ${
-                conv.id === activeId ? 'bg-brand-50/50' : ''
+                conv.conversationId === activeId ? 'bg-brand-50/50' : ''
               }`}
             >
               <div className="relative shrink-0">
-                <span className={`flex h-11 w-11 items-center justify-center rounded-full text-lg ${conv.logoBg}`}>
-                  {conv.logo}
-                </span>
+                <Avatar conversation={conv} index={conversations.indexOf(conv)} />
                 {conv.online && (
                   <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-brand-500" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-slate-900">{conv.company}</p>
-                  <span className="text-[11px] text-slate-400">{conv.time}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-bold text-slate-900">{conv.participant.name}</p>
+                  <span className="shrink-0 text-[11px] text-slate-400">{timeAgo(conv.time)}</span>
                 </div>
-                <p className="mt-0.5 truncate text-xs text-slate-500">{conv.lastMessage}</p>
+                <p className="truncate text-[11px] text-slate-400">{conv.request.listingTitle}</p>
+                <p className="mt-0.5 truncate text-xs text-slate-500">
+                  {conv.lastMessage ? `${conv.lastMessageFromMe ? 'You: ' : ''}${conv.lastMessage}` : 'No messages yet'}
+                </p>
               </div>
               {conv.unread > 0 && (
                 <span className="mt-1 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand-deep px-1.5 text-[10px] font-bold text-white">
@@ -335,51 +336,74 @@ export default function Messages() {
       </div>
 
       {/* Chat window */}
-      <div className="hidden flex-1 flex-col bg-white sm:flex">
+      <div className={`${active ? 'flex' : 'hidden sm:flex'} flex-1 flex-col bg-white`}>
         {active ? (
           <>
             {/* Chat header */}
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4 sm:px-6">
               <div className="flex items-center gap-3">
+                <button
+                  aria-label="Back to conversations"
+                  onClick={() => setActiveId(null)}
+                  className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 sm:hidden"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
                 <div className="relative">
-                  <span className={`flex h-10 w-10 items-center justify-center rounded-full text-lg ${active.logoBg}`}>
-                    {active.logo}
-                  </span>
+                  <Avatar conversation={active} index={activeIndex} size="h-10 w-10 text-lg" />
                   {active.online && (
                     <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-brand-500" />
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-900">{active.company}</p>
+                  <p className="text-sm font-bold text-slate-900">{active.participant.name}</p>
                   <p className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+                    <span className={`h-1.5 w-1.5 rounded-full ${active.online ? 'bg-brand-500' : 'bg-slate-300'}`} />
                     {active.online ? 'Online' : 'Offline'}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {active.collectionId && (
-                  <button className="inline-flex items-center gap-1.5 rounded-xl border border-brand-300 bg-white px-3.5 py-2 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50">
-                    <Calendar className="h-3.5 w-3.5" />
-                    View Collection
-                  </button>
-                )}
-                <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
-                  <Info className="h-4 w-4" />
-                </button>
-              </div>
+              <Link
+                to={requestLink}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-brand-300 bg-white px-3.5 py-2 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                {statusLabel(active.request.status)} request
+              </Link>
             </div>
 
             {/* System message */}
             <div className="border-b border-slate-100 bg-slate-50/50 px-6 py-3">
               <p className="text-center text-xs text-slate-400">
-                This is the beginning of your conversation with <span className="font-medium text-slate-600">{active.company}</span>
-                {active.collectionId && <> about collection <span className="font-medium text-slate-600">{active.collectionId}</span></>}.
+                Conversation with <span className="font-medium text-slate-600">{active.participant.name}</span>
+                {active.request.listingTitle && <> about <span className="font-medium text-slate-600">{active.request.listingTitle}</span></>}.
               </p>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+              {!thread?.items && !thread?.error && (
+                <div className="flex justify-center py-10">
+                  <div className="h-6 w-6 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+                </div>
+              )}
+              {thread?.error && (
+                <div className="mb-3 flex items-center justify-center gap-2 text-xs text-red-600">
+                  <AlertCircle className="h-4 w-4" /> {thread.error}
+                  <button onClick={() => loadThread(activeId)} className="font-semibold underline">Retry</button>
+                </div>
+              )}
+              {thread?.hasMore && (
+                <div className="mb-2 text-center">
+                  <button onClick={loadOlder} className="text-xs font-semibold text-brand-700 hover:underline">
+                    Load earlier messages
+                  </button>
+                </div>
+              )}
+              {thread?.items?.length === 0 && (
+                <p className="py-10 text-center text-sm text-slate-400">No messages yet. Say hello!</p>
+              )}
+
               {Object.entries(groupedMessages).map(([date, msgs]) => (
                 <div key={date}>
                   <div className="my-4 flex items-center gap-3">
@@ -388,38 +412,48 @@ export default function Messages() {
                     <div className="h-px flex-1 bg-slate-200" />
                   </div>
 
-                  {msgs.map((msg) => (
-                    <div key={msg.id} className={`mb-3 flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
-                      {msg.sender !== 'me' && (
-                        <span className={`mr-2.5 mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm ${active.logoBg}`}>
-                          {active.logo}
-                        </span>
-                      )}
-                      <div className={`max-w-md rounded-2xl px-4 py-3 ${
-                        msg.sender === 'me'
-                          ? 'bg-brand-600 text-white rounded-br-md'
-                          : 'bg-slate-100 text-slate-900 rounded-bl-md'
-                      }`}>
-                        <p className="text-sm leading-relaxed">{msg.text}</p>
-                        <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
-                          msg.sender === 'me' ? 'text-white/70' : 'text-slate-400'
+                  {msgs.map((msg) => {
+                    const mine = sameId(msg.sender, myId)
+                    return (
+                      <div key={msg._id} className={`mb-3 flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                        {!mine && (
+                          <span className="mr-2.5 mt-1">
+                            <Avatar conversation={active} index={activeIndex} size="h-8 w-8 text-sm" />
+                          </span>
+                        )}
+                        <div className={`max-w-md rounded-2xl px-4 py-3 ${
+                          mine
+                            ? `${msg.failed ? 'bg-red-500' : 'bg-brand-600'} rounded-br-md text-white`
+                            : 'rounded-bl-md bg-slate-100 text-slate-900'
                         }`}>
-                          <span>{msg.time}</span>
-                          {msg.sender === 'me' && <CheckCheck className="h-3 w-3" />}
+                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{msg.text}</p>
+                          <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
+                            mine ? 'text-white/70' : 'text-slate-400'
+                          }`}>
+                            <span>{formatTime(msg.createdAt)}</span>
+                            {mine && msg.pending && <Clock className="h-3 w-3" />}
+                            {mine && !msg.pending && !msg.failed && (msg.read ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />)}
+                          </div>
+                          {msg.failed && (
+                            <button
+                              onClick={() => sendText(msg.text, msg._id)}
+                              className="mt-1 text-[11px] font-semibold underline"
+                            >
+                              Not sent — tap to retry
+                            </button>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ))}
 
               {/* Typing indicator */}
-              {typing && (
+              {typingIn === activeId && (
                 <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${active.logoBg}`}>
-                    {active.logo}
-                  </span>
-                  <span>{typing} is typing...</span>
+                  <Avatar conversation={active} index={activeIndex} size="h-6 w-6 text-xs" />
+                  <span>{active.participant.name} is typing...</span>
                   <span className="flex gap-0.5">
                     <span className="h-1 w-1 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '0ms' }} />
                     <span className="h-1 w-1 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '150ms' }} />
@@ -431,22 +465,21 @@ export default function Messages() {
             </div>
 
             {/* Input */}
-            <div className="border-t border-slate-100 px-6 py-4">
+            <div className="border-t border-slate-100 px-4 py-4 sm:px-6">
               <div className="flex items-center gap-3">
-                <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
-                  <Paperclip className="h-5 w-5" />
-                </button>
                 <input
                   type="text"
                   placeholder="Type your message..."
                   value={input}
+                  maxLength={2000}
                   onChange={(e) => { setInput(e.target.value); handleTyping() }}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                   className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-brand-400 focus:bg-white"
                 />
                 <button
+                  aria-label="Send message"
                   onClick={handleSend}
-                  disabled={!input.trim()}
+                  disabled={!input.trim() || !thread?.items}
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-deep text-white transition-colors hover:bg-brand-deeper disabled:opacity-50"
                 >
                   <Send className="h-4 w-4" />
@@ -456,7 +489,7 @@ export default function Messages() {
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
-            <p className="text-sm text-slate-400">Select a conversation</p>
+            <p className="text-sm text-slate-400">{conversations.length ? 'Select a conversation' : 'No conversations yet'}</p>
           </div>
         )}
       </div>

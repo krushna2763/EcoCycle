@@ -20,8 +20,8 @@ import {
 import Logo from '../../components/common/Logo'
 import ImageWithFallback from '../../components/common/ImageWithFallback'
 import buyerImg from '../../assets/buyer.jpg'
+import { useAuth } from '../../context/AuthContext'
 
-const API_BASE = 'http://localhost:5000/api'
 
 const BUYER_BENEFITS = [
   { icon: ShieldCheck, title: 'Verified Sellers', desc: 'Connect with verified and trusted plastic waste sellers.' },
@@ -36,6 +36,7 @@ export default function BuyerRegistration() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
+  const { register } = useAuth()
 
   const [form, setForm] = useState({
     businessName: '',
@@ -65,10 +66,7 @@ export default function BuyerRegistration() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API_BASE}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      await register({
           email: form.email,
           password: form.password,
           fullName: form.contactPerson,
@@ -81,30 +79,10 @@ export default function BuyerRegistration() {
           city: form.city,
           businessAddress: form.address,
           pincode: form.pincode,
-        }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.message || 'Registration failed')
-        return
-      }
-      localStorage.setItem('sellerToken', data.token)
-      localStorage.setItem('sellerData', JSON.stringify(data.seller))
       setStep(3)
-    } catch {
-      // Demo fallback
-      const demoBuyer = {
-        id: 'demo-buyer',
-        fullName: form.contactPerson || 'Demo Buyer',
-        email: form.email || 'buyer@ecocycle.com',
-        phone: form.phone || '+91 98765 43210',
-        role: 'buyer',
-        sellerType: 'business',
-        businessName: form.businessName || 'Green Innovations',
-      }
-      localStorage.setItem('sellerToken', 'demo-token')
-      localStorage.setItem('sellerData', JSON.stringify(demoBuyer))
-      setStep(3)
+    } catch (err) {
+      setError(err.message || 'Registration failed')
     } finally {
       setLoading(false)
     }

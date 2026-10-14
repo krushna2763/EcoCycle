@@ -1,131 +1,93 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
+  AlertCircle,
+  Ban,
   CheckCircle2,
   Clock,
   HeadphonesIcon,
   Mail,
   MapPin,
+  MessageSquare,
   Phone,
   Recycle,
+  Truck,
   X,
   XCircle,
   ArrowRight,
 } from 'lucide-react'
-
-const REQUESTS = [
-  {
-    id: 1,
-    company: 'GreenCycle Pvt. Ltd.',
-    verified: true,
-    phone: '+91 98765 43210',
-    email: 'greencycle@gmail.com',
-    location: 'Pune, Maharashtra',
-    logo: '🌿',
-    logoBg: 'bg-emerald-100',
-    interestedIn: 'PET Plastic Bottles',
-    quantity: '50 kg',
-    price: '₹30 / kg',
-    listingLocation: 'Pune, Maharashtra',
-    listedOn: '15 Aug 2024',
-    status: 'pending',
-    requestedOn: '16 Aug 2024, 10:30 AM',
-    message: 'Hi, we are interested in your PET bottles. Please let us know if collection is possible.',
-    gradient: 'from-blue-400 to-cyan-300',
-  },
-  {
-    id: 2,
-    company: 'Eco Recyclers',
-    verified: true,
-    phone: '+91 91234 56789',
-    email: 'info@ecorecyclers.com',
-    location: 'Pimpri, Maharashtra',
-    logo: '♻️',
-    logoBg: 'bg-brand-100',
-    interestedIn: 'HDPE Containers',
-    quantity: '25 kg',
-    price: '₹25 / kg',
-    listingLocation: 'Pimpri, Maharashtra',
-    listedOn: '18 Aug 2024',
-    status: 'accepted',
-    acceptedOn: '20 Aug 2024, 02:15 PM',
-    collectionDate: '20 Aug 2024, 11:00 AM',
-    collectionLocation: 'Pimpri, Maharashtra',
-    gradient: 'from-amber-300 to-orange-300',
-  },
-  {
-    id: 3,
-    company: 'ReUse Industries',
-    verified: true,
-    phone: '+91 99876 54321',
-    email: 'reuseindustries@gmail.com',
-    location: 'Pune, Maharashtra',
-    logo: '🏭',
-    logoBg: 'bg-blue-100',
-    interestedIn: 'Mixed Plastic',
-    quantity: '30 kg',
-    price: '₹20 / kg',
-    listingLocation: 'Pune, Maharashtra',
-    listedOn: '10 Aug 2024',
-    status: 'rejected',
-    rejectedOn: '11 Aug 2024, 09:45 AM',
-    reason: "Currently we don't handle mixed plastic.",
-    gradient: 'from-emerald-400 to-teal-300',
-  },
-  {
-    id: 4,
-    company: 'Planet Recycle Co.',
-    verified: true,
-    phone: '+91 87654 32109',
-    email: 'planet@recycle.com',
-    location: 'Chinchwad, Maharashtra',
-    logo: '🌍',
-    logoBg: 'bg-violet-100',
-    interestedIn: 'LDPE Plastic Wraps',
-    quantity: '10 kg',
-    price: '₹12 / kg',
-    listingLocation: 'Chinchwad, Maharashtra',
-    listedOn: '01 Aug 2024',
-    status: 'pending',
-    requestedOn: '02 Aug 2024, 04:20 PM',
-    message: 'Hello, we can pick up LDPE plastic wraps. Please confirm availability.',
-    gradient: 'from-violet-400 to-purple-300',
-  },
-]
+import api from '../../services/api'
+import { useApi } from '../../hooks/useApi'
+import { announceRequestsChanged, useSocketEvent } from '../../hooks/useLiveUpdates'
+import { formatDate, formatDateTime, scheduleText } from '../../lib/format'
+import { conversationIdFor } from '../../lib/requests'
 
 const TABS = [
-  { label: 'All Requests', count: 4 },
-  { label: 'Pending', count: 2 },
-  { label: 'Accepted', count: 1 },
-  { label: 'Rejected', count: 1 },
-  { label: 'Completed', count: 0 },
+  { label: 'All Requests', statuses: null },
+  { label: 'Pending', statuses: ['pending'] },
+  { label: 'Accepted', statuses: ['accepted', 'scheduled', 'in_progress'] },
+  { label: 'Rejected', statuses: ['rejected'] },
+  { label: 'Completed', statuses: ['completed'] },
+  { label: 'Cancelled', statuses: ['cancelled'] },
 ]
 
 const STATUS_CONFIG = {
   pending: { color: 'bg-amber-50 text-amber-600 border border-amber-200', icon: Clock, label: 'Pending' },
   accepted: { color: 'bg-emerald-50 text-emerald-600 border border-emerald-200', icon: CheckCircle2, label: 'Accepted' },
+  scheduled: { color: 'bg-blue-50 text-blue-600 border border-blue-200', icon: Truck, label: 'Scheduled' },
+  in_progress: { color: 'bg-indigo-50 text-indigo-600 border border-indigo-200', icon: Truck, label: 'In Progress' },
+  completed: { color: 'bg-teal-50 text-teal-600 border border-teal-200', icon: CheckCircle2, label: 'Completed' },
   rejected: { color: 'bg-red-50 text-red-500 border border-red-200', icon: XCircle, label: 'Rejected' },
+  cancelled: { color: 'bg-slate-100 text-slate-500 border border-slate-200', icon: Ban, label: 'Cancelled' },
+}
+
+const GRADIENTS = ['from-blue-400 to-cyan-300', 'from-amber-300 to-orange-300', 'from-emerald-400 to-teal-300', 'from-violet-400 to-purple-300']
+const LOGO_BGS = ['bg-emerald-100', 'bg-brand-100', 'bg-blue-100', 'bg-violet-100']
+
+const statusTime = (req) => {
+  switch (req.status) {
+    case 'pending': return `Requested on ${formatDateTime(req.createdAt)}`
+    case 'rejected': return `Rejected on ${formatDateTime(req.rejectedAt || req.updatedAt)}`
+    case 'cancelled': return `Cancelled on ${formatDateTime(req.cancelledAt || req.updatedAt)}`
+    case 'completed': return `Completed on ${formatDateTime(req.completedAt || req.updatedAt)}`
+    default: return `Accepted on ${formatDateTime(req.acceptedAt || req.updatedAt)}`
+  }
 }
 
 export default function Requests() {
   const [activeTab, setActiveTab] = useState('All Requests')
-  const [requests, setRequests] = useState(REQUESTS)
+  const [actingId, setActingId] = useState(null)
+  const [actionError, setActionError] = useState('')
+  const { data, loading, error, reload } = useApi(() => api.getRequests(), [])
+  const requests = data?.requests || []
 
-  const filteredRequests = requests.filter((r) => {
-    if (activeTab === 'All Requests') return true
-    return r.status === activeTab.toLowerCase()
-  })
+  // New requests and buyer cancellations arrive as notifications
+  useSocketEvent('notification', (n) => n.type === 'request' || n.type === 'collection' ? reload() : null)
 
-  const handleAccept = (id) => {
-    setRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'accepted', acceptedOn: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) + ', ' + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) } : r))
-    )
+  const tab = TABS.find((t) => t.label === activeTab)
+  const filteredRequests = requests.filter((r) => !tab.statuses || tab.statuses.includes(r.status))
+  const countFor = (t) => (t.statuses ? requests.filter((r) => t.statuses.includes(r.status)).length : requests.length)
+
+  const act = async (id, action) => {
+    setActingId(id)
+    setActionError('')
+    try {
+      await action()
+      announceRequestsChanged()
+      reload()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setActingId(null)
+    }
   }
 
+  const handleAccept = (id) => act(id, () => api.acceptRequest(id))
+
   const handleDecline = (id) => {
-    setRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'rejected', rejectedOn: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) + ', ' + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) } : r))
-    )
+    const reason = window.prompt('Reason for declining (optional):')
+    if (reason === null) return
+    act(id, () => api.rejectRequest(id, reason.trim() || undefined))
   }
 
   return (
@@ -137,54 +99,79 @@ export default function Requests() {
 
         {/* Tabs */}
         <div className="mt-6 flex flex-wrap gap-2 border-b border-slate-200">
-          {TABS.map(({ label, count }) => {
-            const isActive = activeTab === label
+          {TABS.map((t) => {
+            const isActive = activeTab === t.label
             return (
               <button
-                key={label}
-                onClick={() => setActiveTab(label)}
+                key={t.label}
+                onClick={() => setActiveTab(t.label)}
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-all ${
                   isActive
                     ? 'border-brand-600 text-brand-700'
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
-                {label}
+                {t.label}
                 <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
                   isActive ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-500'
                 }`}>
-                  {count}
+                  {countFor(t)}
                 </span>
               </button>
             )
           })}
         </div>
 
+        {actionError && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            {actionError}
+          </div>
+        )}
+
         {/* Request cards */}
         <div className="mt-6 space-y-5">
-          {filteredRequests.length === 0 && (
+          {loading && !data && (
+            <div className="flex justify-center py-16">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+              <p className="text-sm font-medium text-red-600">{error}</p>
+              <button onClick={reload} className="mt-3 rounded-xl border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-100">
+                Try again
+              </button>
+            </div>
+          )}
+
+          {data && filteredRequests.length === 0 && (
             <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
               <Recycle className="mx-auto h-12 w-12 text-slate-300" />
               <p className="mt-3 text-sm font-medium text-slate-500">No requests found</p>
             </div>
           )}
 
-          {filteredRequests.map((req) => {
-            const st = STATUS_CONFIG[req.status]
+          {filteredRequests.map((req, idx) => {
+            const st = STATUS_CONFIG[req.status] || STATUS_CONFIG.pending
             const StatusIcon = st.icon
+            const buyer = req.buyer || {}
+            const isActive = ['accepted', 'scheduled', 'in_progress'].includes(req.status)
+            const busy = actingId === req._id
             return (
-              <div key={req.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div key={req._id} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 {/* Top section: 3 columns */}
                 <div className="grid gap-0 sm:grid-cols-[1fr_1fr_auto]">
                   {/* Company info */}
                   <div className="border-b border-slate-100 p-5 sm:border-b-0 sm:border-r sm:pr-5">
                     <div className="flex items-center gap-3">
-                      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-xl ${req.logoBg}`}>
-                        {req.logo}
+                      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-bold text-slate-700 ${LOGO_BGS[idx % LOGO_BGS.length]}`}>
+                        {(req.companyName || 'B').charAt(0)}
                       </span>
                       <div>
-                        <p className="text-sm font-bold text-slate-900">{req.company}</p>
-                        {req.verified && (
+                        <p className="text-sm font-bold text-slate-900">{req.companyName}</p>
+                        {buyer.verificationStatus === 'verified' && (
                           <span className="flex items-center gap-1 text-xs text-brand-600">
                             <CheckCircle2 className="h-3 w-3" />
                             Verified
@@ -193,9 +180,9 @@ export default function Requests() {
                       </div>
                     </div>
                     <div className="mt-4 space-y-2 text-xs text-slate-500">
-                      <p className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-slate-400" /> {req.phone}</p>
-                      <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-slate-400" /> {req.email}</p>
-                      <p className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-slate-400" /> {req.location}</p>
+                      {(buyer.phone || req.buyerPhone) && <p className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-slate-400" /> {buyer.phone || req.buyerPhone}</p>}
+                      {(buyer.email || req.buyerEmail) && <p className="flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-slate-400" /> {buyer.email || req.buyerEmail}</p>}
+                      <p className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-slate-400" /> {req.location || buyer.city}</p>
                     </div>
                   </div>
 
@@ -203,18 +190,18 @@ export default function Requests() {
                   <div className="border-b border-slate-100 p-5 sm:border-b-0 sm:border-r sm:pl-5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Interested in</p>
                     <div className="mt-3 flex gap-3">
-                      <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${req.gradient}`}>
+                      <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${GRADIENTS[idx % GRADIENTS.length]}`}>
                         <Recycle className="h-7 w-7 text-white" strokeWidth={1.5} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-900">{req.interestedIn}</p>
+                        <p className="text-sm font-bold text-slate-900">{req.listing?.title || req.interestedPlasticType}</p>
                         <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-                          <span>{req.quantity}</span>
+                          <span>{req.quantity} kg</span>
                           <span>·</span>
-                          <span>{req.price}</span>
+                          <span>Offer ₹{req.offerPrice ?? req.listing?.pricePerKg} / kg</span>
                         </div>
-                        <p className="mt-0.5 text-xs text-slate-500">{req.listingLocation}</p>
-                        <p className="mt-0.5 text-[11px] text-slate-400">Listed on {req.listedOn}</p>
+                        {req.listing?.location && <p className="mt-0.5 text-xs text-slate-500">{req.listing.location}</p>}
+                        {req.listing?.createdAt && <p className="mt-0.5 text-[11px] text-slate-400">Listed on {formatDate(req.listing.createdAt)}</p>}
                       </div>
                     </div>
                   </div>
@@ -225,11 +212,7 @@ export default function Requests() {
                       <StatusIcon className="h-3.5 w-3.5" />
                       {st.label}
                     </span>
-                    <p className="mt-2 text-right text-[11px] text-slate-400">
-                      {req.status === 'pending' && `Requested on ${req.requestedOn}`}
-                      {req.status === 'accepted' && `Accepted on ${req.acceptedOn}`}
-                      {req.status === 'rejected' && `Rejected on ${req.rejectedOn}`}
-                    </p>
+                    <p className="mt-2 text-right text-[11px] text-slate-400">{statusTime(req)}</p>
                   </div>
                 </div>
 
@@ -241,51 +224,71 @@ export default function Requests() {
                   </div>
                 )}
 
-                {req.status === 'accepted' && req.collectionDate && (
+                {req.scheduledDate && isActive && (
                   <div className="mx-5 mb-4 flex items-start gap-3 rounded-xl border border-brand-200 bg-brand-50/60 p-4">
                     <span className="mt-0.5 text-lg">📦</span>
                     <div>
                       <p className="text-sm font-bold text-brand-700">Collection Scheduled</p>
-                      <p className="mt-0.5 text-xs text-slate-600">{req.collectionDate} • {req.collectionLocation}</p>
+                      <p className="mt-0.5 text-xs text-slate-600">{scheduleText(req)}{req.scheduledLocation && ` • ${req.scheduledLocation}`}</p>
                     </div>
                   </div>
                 )}
 
-                {req.status === 'rejected' && req.reason && (
+                {req.status === 'rejected' && req.rejectionReason && (
                   <div className="mx-5 mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50/60 p-4">
                     <span className="mt-0.5 text-lg">⚠️</span>
                     <div>
                       <p className="text-sm font-bold text-red-600">Reason</p>
-                      <p className="mt-0.5 text-xs text-slate-600">{req.reason}</p>
+                      <p className="mt-0.5 text-xs text-slate-600">{req.rejectionReason}</p>
                     </div>
                   </div>
                 )}
 
+                {req.status === 'cancelled' && (
+                  <div className="mx-5 mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+                    Cancelled by {req.cancelledBy === 'seller' ? 'you' : 'the buyer'}
+                    {req.cancellationReason && <> — {req.cancellationReason}</>}
+                  </div>
+                )}
+
                 {/* Actions */}
-                <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
+                <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
+                  <Link
+                    to="/seller/dashboard/messages"
+                    search={{ c: conversationIdFor(req) }}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-700 transition-colors hover:border-brand-400 hover:text-brand-700"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Message
+                  </Link>
                   {req.status === 'pending' && (
                     <>
                       <button
-                        onClick={() => handleDecline(req.id)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 px-4 py-2.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                        onClick={() => handleDecline(req._id)}
+                        disabled={busy}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 px-4 py-2.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
                       >
                         <X className="h-3.5 w-3.5" />
                         Decline
                       </button>
                       <button
-                        onClick={() => handleAccept(req.id)}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-brand-deep px-5 py-2.5 text-xs font-semibold text-white transition-all hover:bg-brand-deeper"
+                        onClick={() => handleAccept(req._id)}
+                        disabled={busy}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-brand-deep px-5 py-2.5 text-xs font-semibold text-white transition-all hover:bg-brand-deeper disabled:opacity-50"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        Accept
+                        {busy ? 'Saving...' : 'Accept'}
                       </button>
                     </>
                   )}
-                  {req.status !== 'pending' && (
-                    <button className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-700 transition-colors hover:border-brand-400 hover:text-brand-700">
-                      View Details
+                  {(isActive || req.status === 'completed') && (
+                    <Link
+                      to="/seller/dashboard/collections"
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-semibold text-slate-700 transition-colors hover:border-brand-400 hover:text-brand-700"
+                    >
+                      {isActive ? 'Manage Collection' : 'View Collection'}
                       <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
+                    </Link>
                   )}
                 </div>
               </div>
@@ -304,10 +307,10 @@ export default function Requests() {
               <p className="mt-0.5 text-xs text-slate-500">Our support team is here to assist you with any queries.</p>
             </div>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-deeper">
+          <Link to="/contact" className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-deeper">
             <HeadphonesIcon className="h-4 w-4" />
             Contact Support
-          </button>
+          </Link>
         </div>
       </div>
     </div>

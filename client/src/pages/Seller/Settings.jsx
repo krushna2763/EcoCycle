@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
+  AlertCircle,
   Bell,
   Calendar,
   CheckCircle2,
@@ -14,107 +15,76 @@ import {
   User,
   FileText,
 } from 'lucide-react'
+import api from '../../services/api'
+import { useApi } from '../../hooks/useApi'
 
-const API_BASE = 'http://localhost:5000/api'
-
-const DEFAULT_SETTINGS = {
-  language: 'English',
-  timezone: '(GMT+05:30) Asia/Kolkata',
-  dateFormat: 'DD MMM YYYY',
+// Only these keys are edited on this page; everything else in the settings document is left alone
+const editable = (settings) => ({
+  language: settings.language,
+  timezone: settings.timezone,
+  dateFormat: settings.dateFormat,
   notifications: {
-    collectionUpdates: true,
-    messages: true,
-    requestUpdates: true,
+    collectionUpdates: settings.notifications.collectionUpdates,
+    messages: settings.notifications.messages,
+    requestUpdates: settings.notifications.requestUpdates,
   },
-  privacy: {
-    profileVisibility: 'Public',
-    showContactInformation: true,
-  },
-}
+  privacy: settings.privacy,
+})
 
 export default function Settings() {
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const { data, loading, error, reload, setData } = useApi(() => api.getSettings('seller'), [])
+  const [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [saveError, setSaveError] = useState('')
+  const settings = draft || data?.settings
 
-  // Load settings from API or localStorage
-  useEffect(() => {
-    const loadSettings = async () => {
-      const token = localStorage.getItem('sellerToken')
-      if (!token) return
-
-      try {
-        const res = await fetch(`${API_BASE}/seller/settings`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (res.ok) {
-          const data = await res.json()
-          if (data.settings) setSettings(data.settings)
-        }
-      } catch {
-        // Fallback to localStorage
-        const saved = localStorage.getItem('sellerSettings')
-        if (saved) setSettings(JSON.parse(saved))
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadSettings()
-  }, [])
-
-  const updateGeneral = (field, value) => {
-    setSettings((p) => ({ ...p, [field]: value }))
+  const change = (update) => {
+    setDraft((prev) => update(prev || data.settings))
     setSaved(false)
   }
 
-  const updateNotification = (field) => {
-    setSettings((p) => ({
+  const updateGeneral = (field, value) => change((p) => ({ ...p, [field]: value }))
+
+  const updateNotification = (field) =>
+    change((p) => ({ ...p, notifications: { ...p.notifications, [field]: !p.notifications[field] } }))
+
+  const updatePrivacy = (field, value) =>
+    change((p) => ({
       ...p,
-      notifications: { ...p.notifications, [field]: !p.notifications[field] },
+      privacy: { ...p.privacy, [field]: typeof value === 'boolean' || value === undefined ? !p.privacy[field] : value },
     }))
-    setSaved(false)
-  }
-
-  const updatePrivacy = (field, value) => {
-    setSettings((p) => ({
-      ...p,
-      privacy: { ...p.privacy, [field]: typeof value === 'boolean' ? !p.privacy[field] : value },
-    }))
-    setSaved(false)
-  }
 
   const handleSave = async () => {
+    if (!settings || saving) return
     setSaving(true)
-    const token = localStorage.getItem('sellerToken')
-
+    setSaveError('')
     try {
-      const res = await fetch(`${API_BASE}/seller/settings`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(settings),
-      })
-      if (res.ok) {
-        localStorage.setItem('sellerSettings', JSON.stringify(settings))
-        setSaved(true)
-        setTimeout(() => setSaved(false), 3000)
-      }
-    } catch {
-      localStorage.setItem('sellerSettings', JSON.stringify(settings))
+      const res = await api.updateSettings(editable(settings), 'seller')
+      setData({ settings: res.settings })
+      setDraft(null)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      setSaveError(err.message)
     } finally {
       setSaving(false)
     }
   }
 
-  if (loading) {
+  if (loading || !settings) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+        {error ? (
+          <div className="text-center">
+            <p className="text-sm text-red-600">{error}</p>
+            <button onClick={reload} className="mt-3 rounded-xl border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50">
+              Try again
+            </button>
+          </div>
+        ) : (
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+        )}
       </div>
     )
   }
@@ -214,6 +184,12 @@ export default function Settings() {
 
           {/* Save button */}
           <div className="flex items-center justify-end gap-3">
+            {saveError && (
+              <span className="flex items-center gap-1.5 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                {saveError}
+              </span>
+            )}
             {saved && (
               <span className="flex items-center gap-1.5 text-sm text-brand-600">
                 <CheckCircle2 className="h-4 w-4" />
@@ -222,7 +198,7 @@ export default function Settings() {
             )}
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !draft}
               className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-deeper disabled:opacity-50"
             >
               <Save className="h-4 w-4" />

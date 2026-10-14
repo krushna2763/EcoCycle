@@ -3,10 +3,11 @@ import { Outlet } from '@tanstack/react-router'
 import DashboardSidebar from '../components/seller-dashboard/Sidebar'
 import DashboardTopNavbar from '../components/seller-dashboard/TopNavbar'
 import ProtectedRoute from '../components/common/ProtectedRoute'
+import { useAuth } from '../context/AuthContext'
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const seller = JSON.parse(localStorage.getItem('sellerData') || '{}')
+  const { seller } = useAuth()
 
   return (
     <ProtectedRoute requiredRole="seller">

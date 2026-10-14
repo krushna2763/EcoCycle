@@ -1,188 +1,56 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
+import { AlertCircle } from 'lucide-react'
 import DashboardHero from '../../components/seller-dashboard/DashboardHero'
 import DashboardStats from '../../components/seller-dashboard/DashboardStats'
 import DashboardListings from '../../components/seller-dashboard/DashboardListings'
 import DashboardRequests from '../../components/seller-dashboard/DashboardRequests'
 import DashboardHelp from '../../components/seller-dashboard/DashboardHelp'
+import api from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
+import { useApi } from '../../hooks/useApi'
+import { announceRequestsChanged, useSocketEvent } from '../../hooks/useLiveUpdates'
 
-const API_BASE = 'http://localhost:5000/api'
-
-const FALLBACK_STATS = {
-  totalListings: 12,
-  pending: 4,
-  completed: 6,
-  totalRecycled: 230,
-  activeListings: 8,
+const loadDashboard = async () => {
+  const [stats, listings, requests] = await Promise.all([
+    api.getDashboardStats(),
+    api.getListings({ limit: 3 }),
+    api.getRequests({ limit: 3 }),
+  ])
+  return { stats: stats.stats, listings: listings.listings, requests: requests.requests }
 }
 
-const FALLBACK_LISTINGS = [
-  {
-    _id: '1',
-    title: 'PET Plastic Bottles',
-    plasticType: 'PET',
-    quantity: 50,
-    pricePerKg: 30,
-    location: 'Pune, Maharashtra',
-    status: 'approved',
-    image: '/listings/pet-bottles.jpg',
-    viewCount: 24,
-    createdAt: '2024-08-15',
-  },
-  {
-    _id: '2',
-    title: 'HDPE Containers',
-    plasticType: 'HDPE',
-    quantity: 25,
-    pricePerKg: 25,
-    location: 'Pimpri, Maharashtra',
-    status: 'pending',
-    image: '/listings/hdpe-containers.jpg',
-    viewCount: 10,
-    createdAt: '2024-08-18',
-  },
-  {
-    _id: '3',
-    title: 'Mixed Plastic',
-    plasticType: 'Mixed',
-    quantity: 30,
-    pricePerKg: 20,
-    location: 'Pune, Maharashtra',
-    status: 'approved',
-    image: '/listings/mixed-plastic.jpg',
-    viewCount: 18,
-    createdAt: '2024-08-10',
-  },
-]
-
-const FALLBACK_REQUESTS = [
-  {
-    _id: '1',
-    companyName: 'GreenCycle Pvt. Ltd.',
-    interestedPlasticType: 'PET Plastic Bottles',
-    quantity: 50,
-    location: 'Pune',
-    status: 'pending',
-  },
-  {
-    _id: '2',
-    companyName: 'Eco Recyclers',
-    interestedPlasticType: 'HDPE Containers',
-    quantity: 25,
-    location: 'Pimpri',
-    status: 'accepted',
-  },
-  {
-    _id: '3',
-    companyName: 'ReUse Industries',
-    interestedPlasticType: 'Mixed Plastic',
-    quantity: 30,
-    location: 'Pune',
-    status: 'rejected',
-  },
-]
-
 export default function SellerDashboard() {
-  const [seller, setSeller] = useState(null)
-  const [stats, setStats] = useState(FALLBACK_STATS)
-  const [listings, setListings] = useState(FALLBACK_LISTINGS)
-  const [requests, setRequests] = useState(FALLBACK_REQUESTS)
-  const [loading, setLoading] = useState(true)
-  const navigate = useNavigate()
+  const { seller } = useAuth()
+  const { data, loading, error, reload } = useApi(loadDashboard, [])
+  const [actingId, setActingId] = useState(null)
+  const [actionError, setActionError] = useState('')
 
-  useEffect(() => {
-    const token = localStorage.getItem('sellerToken')
-    const sellerData = localStorage.getItem('sellerData')
+  // Keep numbers current as buyers send, cancel or complete requests
+  useSocketEvent('notification', reload)
 
-    if (!token) {
-      navigate({ to: '/login' })
-      return
-    }
-
-    if (sellerData) {
-      try {
-        setSeller(JSON.parse(sellerData))
-      } catch {
-        setSeller({ fullName: 'Seller' })
-      }
-    }
-
-    const fetchDashboard = async () => {
-      try {
-        const headers = { Authorization: `Bearer ${token}` }
-
-        const meRes = await fetch(`${API_BASE}/auth/me`, { headers })
-        if (meRes.ok) {
-          const meData = await meRes.json()
-          setSeller(meData.seller)
-        }
-
-        const statsRes = await fetch(`${API_BASE}/seller/dashboard/stats`, { headers })
-        if (statsRes.ok) {
-          const statsData = await statsRes.json()
-          setStats(statsData.stats)
-        }
-
-        const listingsRes = await fetch(`${API_BASE}/seller/listings`, { headers })
-        if (listingsRes.ok) {
-          const listingsData = await listingsRes.json()
-          if (listingsData.listings?.length > 0) setListings(listingsData.listings)
-        }
-
-        const requestsRes = await fetch(`${API_BASE}/seller/requests`, { headers })
-        if (requestsRes.ok) {
-          const requestsData = await requestsRes.json()
-          if (requestsData.requests?.length > 0) setRequests(requestsData.requests)
-        }
-      } catch {
-        console.log('API not available, using fallback data')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchDashboard()
-  }, [navigate])
-
-  const handleAcceptRequest = async (requestId) => {
-    const token = localStorage.getItem('sellerToken')
+  const act = async (requestId, action) => {
+    setActingId(requestId)
+    setActionError('')
     try {
-      const res = await fetch(`${API_BASE}/seller/requests/${requestId}/accept`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        setRequests((prev) =>
-          prev.map((r) => (r._id === requestId ? { ...r, status: 'accepted' } : r))
-        )
-      }
-    } catch {
-      setRequests((prev) =>
-        prev.map((r) => (r._id === requestId ? { ...r, status: 'accepted' } : r))
-      )
+      await action()
+      announceRequestsChanged()
+      reload()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setActingId(null)
     }
   }
 
-  const handleRejectRequest = async (requestId) => {
-    const token = localStorage.getItem('sellerToken')
-    try {
-      const res = await fetch(`${API_BASE}/seller/requests/${requestId}/reject`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        setRequests((prev) =>
-          prev.map((r) => (r._id === requestId ? { ...r, status: 'rejected' } : r))
-        )
-      }
-    } catch {
-      setRequests((prev) =>
-        prev.map((r) => (r._id === requestId ? { ...r, status: 'rejected' } : r))
-      )
-    }
+  const handleAcceptRequest = (requestId) => act(requestId, () => api.acceptRequest(requestId))
+
+  const handleRejectRequest = (requestId) => {
+    const reason = window.prompt('Reason for declining (optional):')
+    if (reason === null) return
+    act(requestId, () => api.rejectRequest(requestId, reason.trim() || undefined))
   }
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
@@ -194,13 +62,25 @@ export default function SellerDashboard() {
     <div className="p-4 sm:p-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <DashboardHero sellerName={seller?.fullName} />
-        <DashboardStats stats={stats} />
-        <DashboardListings listings={listings} />
-        <DashboardRequests
-          requests={requests}
-          onAccept={handleAcceptRequest}
-          onReject={handleRejectRequest}
-        />
+        {(error || actionError) && (
+          <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {actionError || error}
+            {error && <button onClick={reload} className="ml-auto font-semibold underline">Retry</button>}
+          </div>
+        )}
+        {data && (
+          <>
+            <DashboardStats stats={data.stats} />
+            <DashboardListings listings={data.listings} />
+            <DashboardRequests
+              requests={data.requests}
+              onAccept={handleAcceptRequest}
+              onReject={handleRejectRequest}
+              actingId={actingId}
+            />
+          </>
+        )}
         <DashboardHelp />
       </div>
     </div>

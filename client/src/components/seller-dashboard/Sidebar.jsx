@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   LayoutDashboard,
@@ -14,12 +13,13 @@ import {
   X,
 } from 'lucide-react'
 import earthImg from '../../assets/Earth.png'
+import { usePendingRequestCount } from '../../hooks/useLiveUpdates'
 
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: 'Overview', path: '/seller/dashboard' },
   { icon: Package, label: 'My Listings', path: '/seller/dashboard/listings' },
   { icon: PlusCircle, label: 'Add Plastic Waste', path: '/seller/dashboard/add-listing' },
-  { icon: GitPullRequestArrow, label: 'Requests', path: '/seller/dashboard/requests', badge: 4 },
+  { icon: GitPullRequestArrow, label: 'Requests', path: '/seller/dashboard/requests', badgeKey: 'pendingRequests' },
   { icon: FolderOpen, label: 'Collections', path: '/seller/dashboard/collections' },
   { icon: MessageSquare, label: 'Messages', path: '/seller/dashboard/messages' },
   { icon: Bell, label: 'Notifications', path: '/seller/dashboard/notifications' },
@@ -29,6 +29,7 @@ const NAV_ITEMS = [
 
 export default function DashboardSidebar({ isOpen, onClose }) {
   const location = useLocation()
+  const badges = { pendingRequests: usePendingRequestCount() }
 
   return (
     <>
@@ -67,7 +68,8 @@ export default function DashboardSidebar({ isOpen, onClose }) {
 
           {/* Nav items */}
           <nav className="flex-1 space-y-1 px-3 py-2">
-            {NAV_ITEMS.map(({ icon: Icon, label, path, badge }) => {
+            {NAV_ITEMS.map(({ icon: Icon, label, path, badgeKey }) => {
+              const badge = badgeKey ? badges[badgeKey] : 0
               const isActive = path === '/seller/dashboard' ? location.pathname === path : location.pathname.startsWith(path)
               return (
                 <Link
@@ -85,7 +87,7 @@ export default function DashboardSidebar({ isOpen, onClose }) {
                 >
                   <Icon className={`h-5 w-5 ${isActive ? 'text-brand-600' : 'text-slate-400'}`} strokeWidth={1.8} />
                   <span className="flex-1">{label}</span>
-                  {badge && (
+                  {badge > 0 && (
                     <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-deep px-1.5 text-[10px] font-bold text-white">
                       {badge}
                     </span>

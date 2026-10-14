@@ -25,6 +25,7 @@ import FileUpload from '../../components/common/FileUpload'
 import ImageWithFallback from '../../components/common/ImageWithFallback'
 import heroImg from '../../assets/impact/livelihood.png'
 import congImg from '../../assets/cong.png'
+import { useAuth } from '../../context/AuthContext'
 
 const BENEFITS = [
   {
@@ -123,6 +124,21 @@ export default function SellerRegistration() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const navigate = useNavigate()
+  const { register } = useAuth()
+
+  // Only move to the confirmation step once the account really exists
+  const submitRegistration = async (payload) => {
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      await register({ fullName: form.fullName, phone: form.phone, email: form.email, password: form.password, sellerType, ...payload })
+      setStep(5)
+    } catch (err) {
+      setSubmitError(err.message || 'Registration failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   // Step 1
   const [form, setForm] = useState({
@@ -461,7 +477,7 @@ export default function SellerRegistration() {
                   <button type="button" onClick={() => setStep(3)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-brand-400 hover:text-brand-700">
                     <ArrowLeft className="h-4 w-4" /> Back
                   </button>
-                  <button type="button" onClick={async () => { setSubmitting(true); setSubmitError(''); try { const res = await fetch('http://localhost:5000/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fullName: form.fullName, phone: form.phone, email: form.email, password: form.password, sellerType, city: individual.city, pincode: individual.pincode, pickupAddress: individual.address, plasticTypes: individual.plasticTypes, collectionSource: individual.collectionSource, averageQuantity: individual.avgQuantity, additionalNotes: individual.additionalInfo }) }); const data = await res.json(); if (!res.ok) { setSubmitError(data.message || 'Registration failed'); return; } localStorage.setItem('sellerToken', data.token); localStorage.setItem('sellerData', JSON.stringify(data.seller)); setStep(5); } catch { setStep(5); } finally { setSubmitting(false); } }} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-deeper disabled:opacity-50">
+                  <button type="button" onClick={() => submitRegistration({ city: individual.city, pincode: individual.pincode, pickupAddress: individual.address, plasticTypes: individual.plasticTypes, collectionSource: individual.collectionSource, averageQuantity: individual.avgQuantity, additionalNotes: individual.additionalInfo })} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-deeper disabled:opacity-50">
                     {submitting ? 'Submitting...' : 'Submit for Verification'} <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -511,7 +527,7 @@ export default function SellerRegistration() {
                   <button type="button" onClick={() => setStep(3)} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:border-brand-400 hover:text-brand-700">
                     <ArrowLeft className="h-4 w-4" /> Back
                   </button>
-                  <button type="button" onClick={async () => { setSubmitting(true); setSubmitError(''); try { const res = await fetch('http://localhost:5000/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fullName: form.fullName, phone: form.phone, email: form.email, password: form.password, sellerType, businessName: business.businessName, businessType: business.businessType, gstNumber: business.gstNumber, panNumber: business.panNumber, yearOfEstablishment: business.yearOfEstablishment, numberOfEmployees: business.numberOfEmployees, businessAddress: business.businessAddress, city: business.city, pincode: business.pincode, plasticTypes: business.plasticTypes, businessDescription: business.businessDescription }) }); const data = await res.json(); if (!res.ok) { setSubmitError(data.message || 'Registration failed'); return; } localStorage.setItem('sellerToken', data.token); localStorage.setItem('sellerData', JSON.stringify(data.seller)); setStep(5); } catch { setStep(5); } finally { setSubmitting(false); } }} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-deeper disabled:opacity-50">
+                  <button type="button" onClick={() => submitRegistration({ businessName: business.businessName, businessType: business.businessType, gstNumber: business.gstNumber, panNumber: business.panNumber, yearOfEstablishment: business.yearOfEstablishment, numberOfEmployees: business.numberOfEmployees, businessAddress: business.businessAddress, city: business.city, pincode: business.pincode, plasticTypes: business.plasticTypes, businessDescription: business.businessDescription })} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-deeper disabled:opacity-50">
                     {submitting ? 'Submitting...' : 'Submit for Verification'} <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>

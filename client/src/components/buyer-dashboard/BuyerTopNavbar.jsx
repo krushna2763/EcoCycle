@@ -1,11 +1,17 @@
 import { Menu, Bell, ChevronDown, LogOut } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { useAuth } from '../../context/AuthContext'
+import { useUnreadNotificationCount } from '../../hooks/useLiveUpdates'
+import { assetUrl } from '../../services/api'
 
 export default function BuyerTopNavbar({ onMenuClick, buyer }) {
   const [showProfile, setShowProfile] = useState(false)
   const profileRef = useRef(null)
   const navigate = useNavigate()
+  const { logout } = useAuth()
+  const unread = useUnreadNotificationCount()
+  const avatar = assetUrl(buyer?.avatar)
 
   useEffect(() => {
     const handler = (e) => {
@@ -18,8 +24,7 @@ export default function BuyerTopNavbar({ onMenuClick, buyer }) {
   }, [])
 
   const handleLogout = () => {
-    localStorage.removeItem('sellerToken')
-    localStorage.removeItem('sellerData')
+    logout()
     navigate({ to: '/login' })
   }
 
@@ -38,12 +43,15 @@ export default function BuyerTopNavbar({ onMenuClick, buyer }) {
       {/* Notification bell */}
       <button
         onClick={() => navigate({ to: '/buyer/dashboard/notifications' })}
+        aria-label={unread ? `${unread} unread notifications` : 'Notifications'}
         className="relative mr-4 rounded-lg p-2 text-slate-500 hover:bg-slate-100"
       >
         <Bell className="h-5 w-5" strokeWidth={1.8} />
-        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
-          2
-        </span>
+        {unread > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
       </button>
 
       {/* Profile */}
@@ -52,14 +60,20 @@ export default function BuyerTopNavbar({ onMenuClick, buyer }) {
           onClick={() => setShowProfile(!showProfile)}
           className="flex items-center gap-2.5 rounded-xl px-3 py-1.5 transition-colors hover:bg-slate-50"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
-            {buyer?.fullName?.charAt(0) || buyer?.businessName?.charAt(0) || 'B'}
-          </div>
+          {avatar ? (
+            <img src={avatar} alt="" className="h-9 w-9 rounded-full object-cover" />
+          ) : (
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+              {buyer?.fullName?.charAt(0) || buyer?.businessName?.charAt(0) || 'B'}
+            </div>
+          )}
           <div className="hidden text-left sm:block">
             <p className="text-sm font-semibold text-slate-900 leading-tight">
               {buyer?.businessName || buyer?.fullName || 'Buyer'}
             </p>
-            <p className="text-[11px] font-medium text-blue-600">Verified Buyer</p>
+            <p className="text-[11px] font-medium text-blue-600">
+              {buyer?.verificationStatus === 'verified' ? 'Verified Buyer' : 'Buyer'}
+            </p>
           </div>
           <ChevronDown className="hidden h-4 w-4 text-slate-400 sm:block" />
         </button>

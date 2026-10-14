@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
+import { Link, useParams, useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
   MapPin,
@@ -9,104 +9,18 @@ import {
   CheckCircle2,
   Send,
   Eye,
+  FileText,
 } from 'lucide-react'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-
-const DEMO_LISTING = {
-  _id: 'demo1',
-  title: 'PET Plastic Bottles',
-  plasticType: 'PET',
-  quantity: 50,
-  pricePerKg: 30,
-  location: 'Pune, Maharashtra',
-  condition: 'Clean',
-  description:
-    'Clean used PET bottles collected from local shops and segregation units. Washed and sorted, ideal for recycling into rPET flakes and fibers.',
-  availability: 'Available for pickup',
-  collectionType: 'Seller pickup or buyer transport',
-  seller: { fullName: 'Krushna Bhagawat', city: 'Pune', phone: '+91 98765 43210', businessName: 'EcoCollective' },
-  viewCount: 24,
-}
+import api, { assetUrl } from '../../services/api'
+import { useApi } from '../../hooks/useApi'
+import { statusLabel } from '../../lib/format'
 
 export default function ListingDetails() {
   const { id } = useParams({ strict: false })
   const navigate = useNavigate()
-
-  const [listing, setListing] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [error, setError] = useState('')
-  const [form, setForm] = useState({ quantity: '', offerPrice: '', location: '', message: '' })
-
-  useEffect(() => {
-    const applyListing = (l) => {
-      setListing(l)
-      if (l) {
-        setForm((f) => ({
-          ...f,
-          quantity: l.quantity || '',
-          offerPrice: l.pricePerKg || '',
-          location: l.location || '',
-        }))
-      }
-    }
-    const fetchListing = async () => {
-      const token = localStorage.getItem('sellerToken')
-      try {
-        const headers = token ? { Authorization: 'Bearer ' + token } : {}
-        const res = await fetch(`${API_BASE}/buyer/listings/${id}`, { headers })
-        if (res.ok) {
-          const data = await res.json()
-          applyListing(data.listing)
-        } else {
-          applyListing(DEMO_LISTING)
-        }
-      } catch {
-        applyListing(DEMO_LISTING)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchListing()
-  }, [id])
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setSubmitting(true)
-    setError('')
-    const token = localStorage.getItem('sellerToken')
-    try {
-      const res = await fetch(`${API_BASE}/buyer/requests`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: 'Bearer ' + token }),
-        },
-        body: JSON.stringify({
-          listingId: id,
-          quantity: Number(form.quantity),
-          offerPrice: Number(form.offerPrice),
-          location: form.location,
-          message: form.message,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.message || 'Failed to send request')
-        return
-      }
-      setSuccess(true)
-      setTimeout(() => navigate({ to: '/buyer/dashboard/requests' }), 1500)
-    } catch {
-      // Demo mode: API unavailable
-      setSuccess(true)
-      setTimeout(() => navigate({ to: '/buyer/dashboard/requests' }), 1500)
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  const { data, loading, error } = useApi(() => api.getMarketplaceListing(id), [id])
+  const listing = data?.listing
+  const activeRequest = data?.activeRequest
 
   if (loading) {
     return (
@@ -119,7 +33,9 @@ export default function ListingDetails() {
   if (!listing) {
     return (
       <div className="flex min-h-full flex-col items-center justify-center bg-[#f8faf8] py-20">
-        <p className="text-sm font-semibold text-slate-600">Listing not found</p>
+        <p className="text-sm font-semibold text-slate-600">
+          {error === 'Listing not found' || !error ? 'This listing is no longer available' : error}
+        </p>
         <button
           onClick={() => navigate({ to: '/buyer/dashboard/listings' })}
           className="mt-4 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-semibold text-white hover:bg-blue-700"
@@ -129,6 +45,10 @@ export default function ListingDetails() {
       </div>
     )
   }
+
+  const sellerName = listing.seller?.businessName || listing.seller?.fullName || 'EcoCycle Seller'
+  const photos = [...(listing.images || []), listing.image].map(assetUrl).filter(Boolean)
+  const gallery = [...new Set(photos)]
 
   return (
     <div className="min-h-full bg-[#f8faf8] p-4 sm:p-6 lg:p-8">
@@ -144,6 +64,8 @@ export default function ListingDetails() {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left: listing details */}
           <div className="space-y-6 lg:col-span-2">
+            {gallery.length > 0 && <Gallery photos={gallery} title={listing.title} />}
+
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -174,9 +96,14 @@ export default function ListingDetails() {
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <DetailRow icon={MapPin} label="Location" value={listing.location} />
                 <DetailRow icon={Package} label="Quantity Available" value={`${listing.quantity} kg`} />
-                <DetailRow icon={Truck} label="Availability" value={listing.availability || 'Available for pickup'} />
-                <DetailRow icon={Store} label="Collection Type" value={listing.collectionType || 'Pickup by buyer'} />
+                <DetailRow icon={Truck} label="Availability" value={listing.availability || 'Not specified'} />
+                <DetailRow icon={Store} label="Collection Type" value={listing.collectionType || 'Not specified'} />
               </div>
+              {listing.additionalInfo && (
+                <p className="mt-4 rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 text-xs text-slate-600">
+                  {listing.additionalInfo}
+                </p>
+              )}
             </div>
 
             {/* Seller card */}
@@ -184,20 +111,23 @@ export default function ListingDetails() {
               <h2 className="text-base font-bold text-slate-900">About the Seller</h2>
               <div className="mt-4 flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-700">
-                  {(listing.seller?.fullName || 'S').charAt(0)}
+                  {sellerName.charAt(0)}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-900">
-                    {listing.seller?.businessName || listing.seller?.fullName || 'Verified Seller'}
-                  </p>
+                  <p className="text-sm font-bold text-slate-900">{sellerName}</p>
                   <p className="text-xs text-slate-500">
-                    {listing.seller?.city || listing.location} • Trusted Partner
+                    {listing.seller?.city || listing.location}
                   </p>
                 </div>
-                <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-600">
-                  <CheckCircle2 className="h-3 w-3" /> Verified
-                </span>
+                {listing.seller?.verificationStatus === 'verified' && (
+                  <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-600">
+                    <CheckCircle2 className="h-3 w-3" /> Verified
+                  </span>
+                )}
               </div>
+              {!listing.seller?.fullName && (
+                <p className="mt-3 text-xs text-slate-400">This seller keeps their profile private until they accept a request.</p>
+              )}
             </div>
           </div>
 
@@ -212,82 +142,176 @@ export default function ListingDetails() {
                 <p className="text-xs text-slate-400">{listing.quantity} kg max</p>
               </div>
 
-              {success ? (
-                <div className="mt-5 rounded-xl bg-emerald-50 p-4 text-center">
-                  <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
-                  <p className="mt-2 text-sm font-bold text-emerald-700">Request Sent!</p>
-                  <p className="mt-1 text-xs text-emerald-600">Redirecting to your requests...</p>
+              {activeRequest ? (
+                <div className="mt-5 rounded-xl bg-blue-50 p-4 text-center">
+                  <FileText className="mx-auto h-8 w-8 text-blue-600" />
+                  <p className="mt-2 text-sm font-bold text-blue-700">
+                    You already have a {statusLabel(activeRequest.status).toLowerCase()} request
+                  </p>
+                  <p className="mt-1 text-xs text-blue-600">For {activeRequest.quantity} kg of this listing.</p>
+                  <Link
+                    to="/buyer/dashboard/requests"
+                    className="mt-3 inline-flex rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                  >
+                    View My Requests
+                  </Link>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-                  {error && (
-                    <div className="rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600">{error}</div>
-                  )}
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600">Quantity (kg)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      required
-                      value={form.quantity}
-                      onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600">Offer Price (₹/kg)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      required
-                      value={form.offerPrice}
-                      onChange={(e) => setForm({ ...form, offerPrice: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600">Pickup Location</label>
-                    <input
-                      type="text"
-                      required
-                      value={form.location}
-                      onChange={(e) => setForm({ ...form, location: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600">Message (optional)</label>
-                    <textarea
-                      rows="3"
-                      value={form.message}
-                      onChange={(e) => setForm({ ...form, message: e.target.value })}
-                      placeholder="Tell the seller about your requirements..."
-                      className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {submitting ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                    {submitting ? 'Sending...' : 'Send Buy Request'}
-                  </button>
-                </form>
+                <RequestForm listing={listing} />
               )}
             </div>
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function RequestForm({ listing }) {
+  const navigate = useNavigate()
+  const [form, setForm] = useState({
+    quantity: String(listing.quantity || ''),
+    offerPrice: String(listing.pricePerKg || ''),
+    location: '',
+    message: '',
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (submitting) return
+    const quantity = Number(form.quantity)
+    const offerPrice = Number(form.offerPrice)
+    if (!(quantity > 0) || quantity > listing.quantity) {
+      setError(`Enter a quantity between 1 and ${listing.quantity} kg`)
+      return
+    }
+    if (!(offerPrice > 0)) {
+      setError('Enter an offer price greater than 0')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    try {
+      await api.createBuyRequest({
+        listingId: listing._id,
+        quantity,
+        offerPrice,
+        location: form.location.trim() || undefined,
+        message: form.message.trim() || undefined,
+      })
+      setSuccess(true)
+      setTimeout(() => navigate({ to: '/buyer/dashboard/requests' }), 1500)
+    } catch (err) {
+      setError(err.message || 'Failed to send request')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="mt-5 rounded-xl bg-emerald-50 p-4 text-center">
+        <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600" />
+        <p className="mt-2 text-sm font-bold text-emerald-700">Request Sent!</p>
+        <p className="mt-1 text-xs text-emerald-600">Redirecting to your requests...</p>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+      {error && (
+        <div className="rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600">{error}</div>
+      )}
+
+      <div>
+        <label className="text-xs font-semibold text-slate-600">Quantity (kg)</label>
+        <input
+          type="number"
+          min="1"
+          max={listing.quantity}
+          required
+          value={form.quantity}
+          onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+          className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-semibold text-slate-600">Offer Price (₹/kg)</label>
+        <input
+          type="number"
+          min="1"
+          required
+          value={form.offerPrice}
+          onChange={(e) => setForm({ ...form, offerPrice: e.target.value })}
+          className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-semibold text-slate-600">Your Location</label>
+        <input
+          type="text"
+          value={form.location}
+          onChange={(e) => setForm({ ...form, location: e.target.value })}
+          placeholder="Defaults to your profile city"
+          maxLength={200}
+          className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-semibold text-slate-600">Message (optional)</label>
+        <textarea
+          rows="3"
+          value={form.message}
+          onChange={(e) => setForm({ ...form, message: e.target.value })}
+          placeholder="Tell the seller about your requirements..."
+          maxLength={1000}
+          className="mt-1 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white"
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
+      >
+        {submitting ? (
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+        ) : (
+          <Send className="h-4 w-4" />
+        )}
+        {submitting ? 'Sending...' : 'Send Buy Request'}
+      </button>
+    </form>
+  )
+}
+
+function Gallery({ photos, title }) {
+  const [active, setActive] = useState(0)
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <img src={photos[active]} alt={title} className="h-72 w-full object-cover" />
+      {photos.length > 1 && (
+        <div className="flex gap-2 p-3">
+          {photos.map((src, idx) => (
+            <button
+              key={src}
+              onClick={() => setActive(idx)}
+              aria-label={`Show photo ${idx + 1}`}
+              className={`h-14 w-14 overflow-hidden rounded-lg border-2 ${idx === active ? 'border-blue-500' : 'border-transparent'}`}
+            >
+              <img src={src} alt="" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

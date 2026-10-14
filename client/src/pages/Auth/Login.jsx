@@ -16,8 +16,7 @@ import {
 import Logo from '../../components/common/Logo'
 import ImageWithFallback from '../../components/common/ImageWithFallback'
 import heroImg from '../../assets/impact/livelihood.png'
-
-const API_BASE = 'http://localhost:5000/api'
+import { useAuth } from '../../context/AuthContext'
 
 const SELLER_BENEFITS = [
   { icon: ShieldCheck, title: 'Verified & Trusted', desc: 'All buyers are verified to ensure safe and secure transactions.' },
@@ -42,6 +41,7 @@ export default function Login() {
   const [businessForm, setBusinessForm] = useState({ email: '', password: '', gst: '' })
 
   const navigate = useNavigate()
+  const { login } = useAuth()
   const isIndividual = loginType === 'individual'
   const benefits = isIndividual ? SELLER_BENEFITS : BUYER_BENEFITS
 
@@ -53,22 +53,7 @@ export default function Login() {
     const form = isIndividual ? individualForm : businessForm
 
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, password: form.password }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.message || 'Login failed')
-        return
-      }
-
-      // Store token and seller data
-      localStorage.setItem('sellerToken', data.token)
-      localStorage.setItem('sellerData', JSON.stringify(data.seller))
+      const data = await login(form.email, form.password)
 
       // Role-based redirect to dashboard
       if (data.seller?.role === 'buyer') {
@@ -76,18 +61,8 @@ export default function Login() {
       } else {
         navigate({ to: '/seller/dashboard' })
       }
-    } catch {
-      // If API is not available, use demo login
-      const demoSeller = {
-        id: 'demo',
-        fullName: 'Krushna Bhagawat',
-        email: form.email || 'krushna@ecocycle.com',
-        role: isIndividual ? 'seller' : 'seller',
-        sellerType: isIndividual ? 'individual' : 'business',
-      }
-      localStorage.setItem('sellerToken', 'demo-token')
-      localStorage.setItem('sellerData', JSON.stringify(demoSeller))
-      navigate({ to: '/seller/dashboard' })
+    } catch (err) {
+      setError(err.message || 'Login failed')
     } finally {
       setLoading(false)
     }

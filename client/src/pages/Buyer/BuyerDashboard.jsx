@@ -1,38 +1,31 @@
-import { useState, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Store, FileText, Truck, Recycle, TrendingUp, MapPin, Sparkles, ShoppingBag } from 'lucide-react'
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+import { AlertCircle, Store, FileText, Truck, Recycle, TrendingUp, MapPin, Sparkles, ShoppingBag } from 'lucide-react'
+import api from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
+import { useApi } from '../../hooks/useApi'
+import { useSocketEvent } from '../../hooks/useLiveUpdates'
+import { statusLabel } from '../../lib/format'
+
+const EMPTY_STATS = { totalRequests: 0, pendingRequests: 0, acceptedRequests: 0, scheduledRequests: 0, activeCollections: 0, completedRequests: 0, totalMaterialsProcured: 0, availableMarketplaceListings: 0 }
+
+const loadDashboard = async () => {
+  const [stats, listings, requests] = await Promise.all([
+    api.getBuyerStats(),
+    api.getMarketplaceListings({ limit: 4 }),
+    api.getBuyerRequests(),
+  ])
+  return { stats: stats.stats, listings: listings.listings, requests: requests.requests.slice(0, 3) }
+}
+
 export default function BuyerDashboard() {
-  const [buyer] = useState(() => {
-    try {
-      const saved = localStorage.getItem('sellerData')
-      return saved ? JSON.parse(saved) : { fullName: 'Buyer Partner' }
-    } catch {
-      return { fullName: 'Buyer Partner' }
-    }
-  })
-  const [stats, setStats] = useState({ totalRequests: 0, pendingRequests: 0, acceptedRequests: 0, scheduledRequests: 0, activeCollections: 0, completedRequests: 0, totalMaterialsProcured: 0, availableMarketplaceListings: 0 })
-  const [recentListings, setRecentListings] = useState([])
-  const [recentRequests, setRecentRequests] = useState([])
-  useEffect(() => {
-    const token = localStorage.getItem('sellerToken')
-    const fetchData = async () => {
-      try {
-        const headers = token ? { Authorization: 'Bearer ' + token } : {}
-        const [statsRes, listingsRes, requestsRes] = await Promise.all([
-          fetch(API_BASE + '/buyer/dashboard/stats', { headers }),
-          fetch(API_BASE + '/buyer/listings?limit=4', { headers }),
-          fetch(API_BASE + '/buyer/requests', { headers }),
-        ])
-        if (statsRes.ok) { const d = await statsRes.json(); setStats(d.stats) }
-        if (listingsRes.ok) { const d = await listingsRes.json(); setRecentListings(d.listings.slice(0, 4)) }
-        if (requestsRes.ok) { const d = await requestsRes.json(); setRecentRequests(d.requests.slice(0, 3)) }
-      } catch {
-        setStats({ totalRequests: 5, pendingRequests: 2, acceptedRequests: 1, scheduledRequests: 1, activeCollections: 2, completedRequests: 1, totalMaterialsProcured: 250, availableMarketplaceListings: 12 })
-      }
-    }
-    fetchData()
-  }, [])
+  const { seller: buyer } = useAuth()
+  const { data, loading, error, reload } = useApi(loadDashboard, [])
+  const stats = data?.stats || EMPTY_STATS
+  const recentListings = data?.listings || []
+  const recentRequests = data?.requests || []
+
+  // Seller decisions and schedule changes update the numbers live
+  useSocketEvent('notification', reload)
 
   const statCards = [
     { label: 'Total Requests', value: stats.totalRequests, icon: FileText, color: 'text-blue-600 bg-blue-50' },
@@ -91,6 +84,14 @@ export default function BuyerDashboard() {
           </div>
         </div>
 
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+            <button onClick={reload} className="ml-auto font-semibold underline">Retry</button>
+          </div>
+        )}
+
         {/* Stats grid */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {statCards.map(({ label, value, icon: Icon, color }) => (
@@ -101,7 +102,7 @@ export default function BuyerDashboard() {
               <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${color}`}>
                 <Icon className="h-5 w-5" />
               </div>
-              <p className="mt-3 text-2xl font-extrabold text-slate-900">{value}</p>
+              <p className="mt-3 text-2xl font-extrabold text-slate-900">{loading && !data ? '…' : value}</p>
               <p className="mt-0.5 text-xs font-medium text-slate-500">{label}</p>
             </div>
           ))}
@@ -121,7 +122,7 @@ export default function BuyerDashboard() {
             </div>
 
             {recentListings.length === 0 ? (
-              <p className="mt-6 text-sm text-slate-500">No listings available right now.</p>
+              <p className="mt-6 text-sm text-slate-500">{loading && !data ? 'Loading listings…' : 'No listings available right now.'}</p>
             ) : (
               <div className="mt-4 space-y-3">
                 {recentListings.map((listing) => (
@@ -180,8 +181,8 @@ export default function BuyerDashboard() {
                         {req.quantity} kg • {req.location}
                       </p>
                     </div>
-                    <span className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold capitalize ${statusBadge(req.status)}`}>
-                      {req.status}
+                    <span className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold ${statusBadge(req.status)}`}>
+                      {statusLabel(req.status)}
                     </span>
                   </div>
                 ))}

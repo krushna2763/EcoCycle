@@ -3,10 +3,11 @@ import { Outlet } from '@tanstack/react-router'
 import BuyerSidebar from '../components/buyer-dashboard/BuyerSidebar'
 import BuyerTopNavbar from '../components/buyer-dashboard/BuyerTopNavbar'
 import ProtectedRoute from '../components/common/ProtectedRoute'
+import { useAuth } from '../context/AuthContext'
 
 export default function BuyerDashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const buyer = JSON.parse(localStorage.getItem('sellerData') || '{}')
+  const { seller: buyer } = useAuth()
 
   return (
     <ProtectedRoute requiredRole="buyer">

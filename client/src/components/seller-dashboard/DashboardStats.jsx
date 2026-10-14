@@ -20,7 +20,7 @@ const STAT_CONFIG = [
   {
     key: 'completed',
     label: 'Completed',
-    sub: () => 'This Month',
+    sub: () => 'Collections this month',
     icon: CheckCircle2,
     iconBg: 'bg-blue-50',
     iconColor: 'text-blue-600',

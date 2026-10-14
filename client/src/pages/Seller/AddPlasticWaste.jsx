@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useState, useRef, useEffect } from 'react'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
+  AlertCircle,
   Camera,
   CheckCircle2,
   Eye,
@@ -13,12 +14,16 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
+import api, { assetUrl } from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
 
-const PLASTIC_TYPES = ['PET', 'HDPE', 'PVC', 'LDPE', 'PP', 'PS', 'Other']
+const PLASTIC_TYPES = ['PET', 'HDPE', 'PVC', 'LDPE', 'PP', 'PS', 'Mixed', 'Other']
 const UNITS = ['Kilogram (kg)', 'Gram (g)', 'Ton', 'Piece']
 const CONDITIONS = ['Clean', 'Dirty', 'Mixed', 'Contaminated']
 const COLLECTION_TYPES = ['Household', 'Commercial', 'Industrial', 'Street Collection', 'Market', 'Other']
 const AVAILABILITY_OPTIONS = ['Immediately', 'Within 1 day', 'Within 1 week', 'Within 1 month', 'Scheduled pickup']
+const MAX_IMAGES = 5
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 const TIPS = [
   'Provide accurate quantity',
@@ -42,14 +47,58 @@ const initialForm = {
   additionalInfo: '',
 }
 
+// Photos are either already stored ({ url }) or picked in this session ({ file, preview })
+const photoSrc = (photo) => photo.preview || assetUrl(photo.url)
+
 export default function AddPlasticWaste() {
+  const { edit: editParam } = useSearch({ strict: false })
+  const editId = editParam ? String(editParam) : null
+  const { seller } = useAuth()
   const [form, setForm] = useState(initialForm)
-  const [images, setImages] = useState([])
+  const [photos, setPhotos] = useState([])
   const [errors, setErrors] = useState({})
+  const [photoError, setPhotoError] = useState('')
+  const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [loadingListing, setLoadingListing] = useState(Boolean(editId))
   const fileInputRef = useRef(null)
+  const photosRef = useRef(photos)
   const navigate = useNavigate()
+
+  // Release object URLs created for previews
+  useEffect(() => {
+    photosRef.current = photos
+  }, [photos])
+  useEffect(() => () => photosRef.current.forEach((p) => p.preview && URL.revokeObjectURL(p.preview)), [])
+
+  // Edit mode: load the seller's own listing
+  useEffect(() => {
+    if (!editId) return
+    let cancelled = false
+    api.getListing(editId)
+      .then(({ listing }) => {
+        if (cancelled) return
+        setForm({
+          title: listing.title || '',
+          plasticType: listing.plasticType || '',
+          quantity: String(listing.quantity ?? ''),
+          unit: listing.unit || 'Kilogram (kg)',
+          price: String(listing.pricePerKg ?? ''),
+          location: listing.location || '',
+          description: listing.description || '',
+          condition: listing.condition || '',
+          collectionType: listing.collectionType || '',
+          availability: listing.availability || '',
+          additionalInfo: listing.additionalInfo || '',
+        })
+        const stored = listing.images?.length ? listing.images : [listing.image]
+        setPhotos(stored.filter((url) => assetUrl(url)).map((url) => ({ url })))
+      })
+      .catch((error) => !cancelled && setSubmitError(error.message))
+      .finally(() => !cancelled && setLoadingListing(false))
+    return () => { cancelled = true }
+  }, [editId])
 
   const update = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
@@ -57,12 +106,14 @@ export default function AddPlasticWaste() {
   }
 
   const handleImageUpload = (files) => {
-    const validFiles = Array.from(files).filter((f) => {
-      if (!['image/jpeg', 'image/png'].includes(f.type)) return false
-      if (f.size > 5 * 1024 * 1024) return false
-      return true
-    })
-    setImages((prev) => [...prev, ...validFiles].slice(0, 5))
+    setPhotoError('')
+    const picked = Array.from(files)
+    const valid = picked.filter((f) => ['image/jpeg', 'image/png'].includes(f.type) && f.size <= MAX_IMAGE_BYTES)
+    if (valid.length < picked.length) setPhotoError('Only JPG or PNG images up to 5MB are allowed.')
+    const room = MAX_IMAGES - photos.length
+    if (valid.length > room) setPhotoError(`You can add at most ${MAX_IMAGES} photos.`)
+    const added = valid.slice(0, Math.max(room, 0)).map((file) => ({ file, preview: URL.createObjectURL(file) }))
+    setPhotos((prev) => [...prev, ...added])
   }
 
   const handleDrop = (e) => {
@@ -71,7 +122,11 @@ export default function AddPlasticWaste() {
   }
 
   const removeImage = (idx) => {
-    setImages((prev) => prev.filter((_, i) => i !== idx))
+    setPhotos((prev) => {
+      const removed = prev[idx]
+      if (removed?.preview) URL.revokeObjectURL(removed.preview)
+      return prev.filter((_, i) => i !== idx)
+    })
   }
 
   const validate = () => {
@@ -92,54 +147,66 @@ export default function AddPlasticWaste() {
   }
 
   const handlePublish = async () => {
-    if (!validate()) return
+    if (submitting || !validate()) return
     setSubmitting(true)
+    setSubmitError('')
+    let uploaded = []
 
-    const token = localStorage.getItem('sellerToken')
     try {
-      const res = await fetch('http://localhost:5000/api/seller/listings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title: form.title,
-          plasticType: form.plasticType,
-          quantity: Number(form.quantity),
-          unit: form.unit,
-          pricePerKg: Number(form.price),
-          location: form.location,
-          description: form.description,
-          condition: form.condition,
-          collectionType: form.collectionType,
-          availability: form.availability,
-          additionalInfo: form.additionalInfo,
-          image: images.length > 0 ? URL.createObjectURL(images[0]) : '',
-        }),
-      })
+      // Upload new photos first so the listing only references stored images
+      const newFiles = photos.filter((p) => p.file).map((p) => p.file)
+      uploaded = newFiles.length > 0 ? await api.uploadImages(newFiles) : []
+      let next = 0
+      const images = photos.map((p) => (p.file ? uploaded[next++].url : p.url))
 
-      if (res.ok) {
-        setSuccess(true)
-        setTimeout(() => navigate({ to: '/seller/dashboard/listings' }), 2000)
+      const payload = {
+        title: form.title.trim(),
+        plasticType: form.plasticType,
+        quantity: Number(form.quantity),
+        unit: form.unit,
+        pricePerKg: Number(form.price),
+        location: form.location.trim(),
+        description: form.description.trim(),
+        condition: form.condition,
+        collectionType: form.collectionType,
+        availability: form.availability,
+        additionalInfo: form.additionalInfo.trim(),
+        images,
       }
-    } catch {
-      // Offline fallback — still navigate
+
+      if (editId) await api.updateListing(editId, payload)
+      else await api.createListing(payload)
+
       setSuccess(true)
       setTimeout(() => navigate({ to: '/seller/dashboard/listings' }), 2000)
+    } catch (error) {
+      // The listing was not saved, so photos uploaded for it would be left unused
+      if (uploaded.length > 0) api.discardUploads(uploaded)
+      setSubmitError(error.message || 'Could not save the listing. Please try again.')
     } finally {
       setSubmitting(false)
     }
   }
+
+  const profileLocation = [seller?.city, seller?.pincode].filter(Boolean).join(' ') || seller?.pickupAddress
 
   if (success) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <CheckCircle2 className="mx-auto h-16 w-16 text-brand-600" />
-          <h2 className="mt-4 text-xl font-bold text-slate-900">Listing Published!</h2>
-          <p className="mt-2 text-sm text-slate-500">Redirecting to My Listings...</p>
+          <h2 className="mt-4 text-xl font-bold text-slate-900">{editId ? 'Listing Updated!' : 'Listing Submitted!'}</h2>
+          <p className="mt-2 text-sm text-slate-500">It will be visible to buyers once it is approved.</p>
+          <p className="mt-1 text-sm text-slate-500">Redirecting to My Listings...</p>
         </div>
+      </div>
+    )
+  }
+
+  if (loadingListing) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
       </div>
     )
   }
@@ -151,13 +218,24 @@ export default function AddPlasticWaste() {
         <nav className="flex items-center gap-2 text-sm text-slate-500">
           <Link to="/seller/dashboard" className="transition-colors hover:text-brand-600">Home</Link>
           <span className="text-slate-300">›</span>
-          <span className="font-medium text-slate-700">Add Plastic Waste</span>
+          <span className="font-medium text-slate-700">{editId ? 'Edit Listing' : 'Add Plastic Waste'}</span>
         </nav>
 
         <div className="mt-4">
-          <h1 className="text-2xl font-extrabold text-slate-900 sm:text-3xl">Add Plastic Waste</h1>
-          <p className="mt-1 text-sm text-slate-500">Provide accurate details to help recycling companies find your waste.</p>
+          <h1 className="text-2xl font-extrabold text-slate-900 sm:text-3xl">{editId ? 'Edit Listing' : 'Add Plastic Waste'}</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {editId
+              ? 'Saving changes sends the listing back for review before buyers can see it again.'
+              : 'Provide accurate details to help recycling companies find your waste.'}
+          </p>
         </div>
+
+        {submitError && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            {submitError}
+          </div>
+        )}
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
           {/* ── Left: Form ── */}
@@ -208,10 +286,12 @@ export default function AddPlasticWaste() {
               <Field label="Location" required error={errors.location}>
                 <div className="flex gap-3">
                   <input type="text" placeholder="Enter city or area" value={form.location} onChange={update('location')} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
-                  <button type="button" onClick={() => setForm((p) => ({ ...p, location: p.location || 'Pune, Maharashtra' }))} className="flex shrink-0 items-center gap-2 rounded-xl border border-brand-300 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100">
-                    <MapPin className="h-4 w-4" />
-                    <span className="hidden sm:inline">Use Current Location</span>
-                  </button>
+                  {profileLocation && (
+                    <button type="button" onClick={() => setForm((p) => ({ ...p, location: profileLocation }))} className="flex shrink-0 items-center gap-2 rounded-xl border border-brand-300 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100">
+                      <MapPin className="h-4 w-4" />
+                      <span className="hidden sm:inline">Use Profile Location</span>
+                    </button>
+                  )}
                 </div>
               </Field>
 
@@ -265,17 +345,18 @@ export default function AddPlasticWaste() {
                 accept=".jpg,.jpeg,.png"
                 multiple
                 className="hidden"
-                onChange={(e) => handleImageUpload(e.target.files)}
+                onChange={(e) => { handleImageUpload(e.target.files); e.target.value = '' }}
               />
+              {photoError && <p className="mt-2 text-xs text-red-500">{photoError}</p>}
 
               {/* Image previews */}
               <div className="mt-4 grid grid-cols-5 gap-3">
-                {Array.from({ length: 5 }).map((_, idx) => (
+                {Array.from({ length: MAX_IMAGES }).map((_, idx) => (
                   <div key={idx} className="relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                    {images[idx] ? (
+                    {photos[idx] ? (
                       <>
-                        <img src={URL.createObjectURL(images[idx])} alt="" className="h-full w-full object-cover" />
-                        <button onClick={() => removeImage(idx)} className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white">
+                        <img src={photoSrc(photos[idx])} alt="" className="h-full w-full object-cover" />
+                        <button type="button" aria-label="Remove photo" onClick={() => removeImage(idx)} className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white">
                           <Trash2 className="h-3 w-3" />
                         </button>
                       </>
@@ -302,7 +383,7 @@ export default function AddPlasticWaste() {
               </Link>
               <button onClick={handlePublish} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-deeper disabled:opacity-50">
                 {submitting ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Send className="h-4 w-4" />}
-                {submitting ? 'Publishing...' : 'Publish Listing'}
+                {submitting ? 'Saving...' : editId ? 'Save Changes' : 'Publish Listing'}
               </button>
             </div>
           </div>
@@ -374,8 +455,8 @@ export default function AddPlasticWaste() {
                       <p className="text-sm font-semibold text-slate-900">{form.condition}</p>
                     </div>
                   )}
-                  {images[0] && (
-                    <img src={URL.createObjectURL(images[0])} alt="" className="mt-2 h-32 w-full rounded-xl object-cover" />
+                  {photos[0] && (
+                    <img src={photoSrc(photos[0])} alt="" className="mt-2 h-32 w-full rounded-xl object-cover" />
                   )}
                 </div>
               ) : (

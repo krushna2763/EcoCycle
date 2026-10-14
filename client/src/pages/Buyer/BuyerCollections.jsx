@@ -1,57 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import {
+  AlertCircle,
   Calendar,
   CheckCircle2,
   Clock,
   MapPin,
+  MessageSquare,
   Package,
+  Phone,
   Truck,
   HeadphonesIcon,
 } from 'lucide-react'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-
-const DEMO_COLLECTIONS = [
-  {
-    _id: 'demo-col1',
-    listing: { title: 'PET Plastic Bottles', plasticType: 'PET' },
-    seller: { fullName: 'Krushna Bhagawat', city: 'Pune' },
-    quantity: 100,
-    offerPrice: 30,
-    location: 'Pune, Maharashtra',
-    status: 'scheduled',
-    scheduledDate: '24 Aug 2026',
-    scheduledTime: '11:00 AM',
-    scheduledLocation: 'Wakad, Pune',
-    createdAt: '2026-09-18T14:00:00Z',
-  },
-  {
-    _id: 'demo-col2',
-    listing: { title: 'HDPE Containers', plasticType: 'HDPE' },
-    seller: { fullName: 'Eco Collectors', city: 'Pimpri' },
-    quantity: 25,
-    offerPrice: 25,
-    location: 'Pimpri, Maharashtra',
-    status: 'in_progress',
-    scheduledDate: '20 Aug 2026',
-    scheduledTime: '02:00 PM',
-    scheduledLocation: 'Pimpri, Pune',
-    createdAt: '2026-09-15T09:00:00Z',
-  },
-  {
-    _id: 'demo-col3',
-    listing: { title: 'Mixed Plastic Waste', plasticType: 'Mixed' },
-    seller: { fullName: 'Green Roots', city: 'Pune' },
-    quantity: 30,
-    offerPrice: 20,
-    location: 'Pune, Maharashtra',
-    status: 'completed',
-    scheduledDate: '10 Aug 2026',
-    scheduledTime: '09:45 AM',
-    scheduledLocation: 'Viman Nagar, Pune',
-    createdAt: '2026-09-05T11:00:00Z',
-  },
-]
+import api from '../../services/api'
+import { useApi } from '../../hooks/useApi'
+import { useSocketEvent } from '../../hooks/useLiveUpdates'
+import { scheduleText } from '../../lib/format'
+import { conversationIdFor } from '../../lib/requests'
 
 const STATUS_CONFIG = {
   accepted: { color: 'bg-emerald-50 text-emerald-600 border border-emerald-200', icon: CheckCircle2, label: 'Accepted' },
@@ -63,51 +28,24 @@ const STATUS_CONFIG = {
 const ACTIVE_STATUSES = ['accepted', 'scheduled', 'in_progress', 'completed']
 
 export default function BuyerCollections() {
-  const [collections, setCollections] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [actingId, setActingId] = useState(null)
+  const { data, loading, error, reload } = useApi(() => api.getBuyerRequests(), [])
+  const collections = (data?.requests || []).filter((r) => ACTIVE_STATUSES.includes(r.status))
 
-  useEffect(() => {
-    const fetchCollections = async () => {
-      const token = localStorage.getItem('sellerToken')
-      try {
-        const headers = token ? { Authorization: 'Bearer ' + token } : {}
-        const res = await fetch(`${API_BASE}/buyer/requests`, { headers })
-        if (res.ok) {
-          const data = await res.json()
-          const active = (data.requests || []).filter((r) => ACTIVE_STATUSES.includes(r.status))
-          setCollections(active)
-        } else {
-          setCollections(DEMO_COLLECTIONS)
-        }
-      } catch {
-        setCollections(DEMO_COLLECTIONS)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchCollections()
-  }, [])
+  useSocketEvent('notification', (n) => (n.type === 'collection' || n.type === 'request' ? reload() : null))
 
   const handleComplete = async (id) => {
-    const token = localStorage.getItem('sellerToken')
-    setError('')
+    if (!window.confirm('Confirm that you have received this collection?')) return
+    setActingId(id)
+    setActionError('')
     try {
-      const res = await fetch(`${API_BASE}/buyer/requests/${id}/complete`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: 'Bearer ' + token }),
-        },
-      })
-      if (res.ok) {
-        setCollections((prev) => prev.map((c) => (c._id === id ? { ...c, status: 'completed' } : c)))
-      } else {
-        const data = await res.json()
-        setError(data.message || 'Failed to confirm collection')
-      }
-    } catch {
-      setCollections((prev) => prev.map((c) => (c._id === id ? { ...c, status: 'completed' } : c)))
+      await api.completeBuyerCollection(id)
+      reload()
+    } catch (err) {
+      setActionError(err.message || 'Failed to confirm collection')
+    } finally {
+      setActingId(null)
     }
   }
 
@@ -122,14 +60,24 @@ export default function BuyerCollections() {
           </p>
         </div>
 
-        {error && (
-          <div className="rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600">{error}</div>
+        {actionError && (
+          <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {actionError}
+          </div>
         )}
 
         {/* Collections list */}
-        {loading ? (
+        {loading && !data ? (
           <div className="flex items-center justify-center py-20">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center rounded-2xl border border-red-200 bg-red-50 py-12 text-center">
+            <p className="text-sm font-semibold text-red-600">{error}</p>
+            <button onClick={reload} className="mt-3 rounded-xl border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-100">
+              Try again
+            </button>
           </div>
         ) : collections.length === 0 ? (
           <div className="flex flex-col items-center py-20 text-center">
@@ -144,6 +92,8 @@ export default function BuyerCollections() {
             {collections.map((col) => {
               const st = STATUS_CONFIG[col.status] || STATUS_CONFIG.accepted
               const StatusIcon = st.icon
+              const seller = col.seller || {}
+              const busy = actingId === col._id
               return (
                 <div key={col._id} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -157,13 +107,14 @@ export default function BuyerCollections() {
                         </p>
                         <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                           <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" /> {col.scheduledLocation || col.location}
+                            <MapPin className="h-3 w-3" /> {col.scheduledLocation || seller.pickupAddress || col.listing?.location || col.location}
                           </span>
                           <span>{col.quantity} kg</span>
                           {col.offerPrice && <span>₹{col.offerPrice}/kg</span>}
                         </p>
                         <p className="mt-1 text-[11px] text-slate-400">
-                          Seller: {col.seller?.fullName || 'Verified Seller'}
+                          Seller: {seller.businessName || seller.fullName || 'EcoCycle Seller'}
+                          {seller.phone && <span className="ml-2 inline-flex items-center gap-1"><Phone className="h-3 w-3" /> {seller.phone}</span>}
                         </p>
                       </div>
                     </div>
@@ -180,23 +131,36 @@ export default function BuyerCollections() {
                       <Clock className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                       <div>
                         <p className="text-xs font-bold text-blue-700">
-                          {col.status === 'completed' ? 'Collection Completed' : 'Pickup Scheduled'}
+                          {col.status === 'completed' ? 'Collection Completed' : col.status === 'in_progress' ? 'Collection In Progress' : 'Pickup Scheduled'}
                         </p>
                         <p className="mt-0.5 text-xs text-slate-600">
-                          {[col.scheduledDate, col.scheduledTime].filter(Boolean).join(' • ') || 'Completed'}
+                          {scheduleText(col) || 'Completed'}
                           {col.scheduledLocation && ` at ${col.scheduledLocation}`}
                         </p>
+                        {col.scheduleNote && <p className="mt-0.5 text-xs text-slate-500">Note: {col.scheduleNote}</p>}
                       </div>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
+                  {col.status === 'accepted' && !col.scheduledDate && (
+                    <p className="mx-5 mb-4 text-xs text-slate-500">Waiting for the seller to schedule a pickup.</p>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
+                    <Link
+                      to="/buyer/dashboard/messages"
+                      search={{ c: conversationIdFor(col) }}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-blue-300 hover:text-blue-700"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" /> Message Seller
+                    </Link>
                     {col.status !== 'completed' ? (
                       <button
                         onClick={() => handleComplete(col._id)}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+                        disabled={busy}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Confirm Receipt
+                        <CheckCircle2 className="h-3.5 w-3.5" /> {busy ? 'Confirming...' : 'Confirm Receipt'}
                       </button>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600">
@@ -221,10 +185,10 @@ export default function BuyerCollections() {
               <p className="mt-0.5 text-xs text-slate-500">Our support team is here to assist you.</p>
             </div>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700">
+          <Link to="/contact" className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700">
             <HeadphonesIcon className="h-4 w-4" />
             Contact Support
-          </button>
+          </Link>
         </div>
       </div>
     </div>

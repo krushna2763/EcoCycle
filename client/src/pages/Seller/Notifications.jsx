@@ -1,150 +1,66 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
+  AlertCircle,
+  Ban,
   Bell,
   Calendar,
   CheckCircle2,
   CheckCheck,
-  ChevronDown,
   FileText,
   HeadphonesIcon,
   MessageSquare,
-  Package,
   Settings,
-  Star,
   TrendingUp,
   Truck,
+  XCircle,
 } from 'lucide-react'
-
-const NOTIFICATIONS = [
-  {
-    id: 1,
-    type: 'collection',
-    icon: <Truck className="h-5 w-5 text-brand-600" />,
-    iconBg: 'bg-brand-50',
-    title: 'Collection scheduled',
-    desc: 'Your HDPE Containers collection has been scheduled with Eco Recyclers.',
-    time: '10:30 AM',
-    date: '21 Aug 2026',
-    pickupTime: '02:00 PM',
-    action: 'View Collection',
-    actionColor: 'border-brand-300 text-brand-700 hover:bg-brand-50',
-    unread: true,
-  },
-  {
-    id: 2,
-    type: 'request',
-    icon: <FileText className="h-5 w-5 text-amber-600" />,
-    iconBg: 'bg-amber-50',
-    title: 'New collection request',
-    desc: 'GreenCycle Pvt. Ltd. is interested in your PET Plastic Bottles.',
-    time: '10:30 AM',
-    quantity: '50 kg',
-    price: '₹30/kg',
-    action: 'View Request',
-    actionColor: 'border-amber-300 text-amber-700 hover:bg-amber-50',
-    unread: true,
-  },
-  {
-    id: 3,
-    type: 'message',
-    icon: <MessageSquare className="h-5 w-5 text-blue-600" />,
-    iconBg: 'bg-blue-50',
-    title: 'New message from GreenCycle Pvt. Ltd.',
-    desc: 'Yes, we can collect it on 22 Aug at 11:00 AM.',
-    time: '10:20 AM',
-    action: 'Open Message',
-    actionColor: 'border-blue-300 text-blue-700 hover:bg-blue-50',
-    unread: true,
-  },
-  {
-    id: 4,
-    type: 'collection',
-    icon: <Calendar className="h-5 w-5 text-brand-600" />,
-    iconBg: 'bg-brand-50',
-    title: 'Collection reminder',
-    desc: 'Your collection for Mixed Plastic is scheduled tomorrow.',
-    time: 'Yesterday, 06:30 PM',
-    date: '22 Aug 2026',
-    pickupTime: '09:45 AM',
-    unread: false,
-  },
-  {
-    id: 5,
-    type: 'collection',
-    icon: <CheckCircle2 className="h-5 w-5 text-emerald-600" />,
-    iconBg: 'bg-emerald-50',
-    title: 'Collection completed',
-    desc: 'Your LDPE Plastic Wraps collection has been completed.',
-    time: '21 Aug 2026, 04:40 PM',
-    quantity: '10 kg',
-    action: 'View Details',
-    actionColor: 'border-emerald-300 text-emerald-700 hover:bg-emerald-50',
-    unread: false,
-  },
-  {
-    id: 6,
-    type: 'request',
-    icon: <Star className="h-5 w-5 text-amber-500" />,
-    iconBg: 'bg-amber-50',
-    title: 'Request accepted',
-    desc: 'Eco Recyclers has accepted your HDPE Containers request.',
-    time: '20 Aug 2026, 11:15 AM',
-    quantity: '25 kg',
-    price: '₹25/kg',
-    action: 'View Request',
-    actionColor: 'border-amber-300 text-amber-700 hover:bg-amber-50',
-    unread: false,
-  },
-  {
-    id: 7,
-    type: 'listing',
-    icon: <TrendingUp className="h-5 w-5 text-brand-600" />,
-    iconBg: 'bg-brand-50',
-    title: 'New listing is live',
-    desc: 'Your PET Plastic Bottles listing is now live and visible to recyclers.',
-    time: '19 Aug 2026, 09:10 AM',
-    action: 'View Listing',
-    actionColor: 'border-brand-300 text-brand-700 hover:bg-brand-50',
-    unread: false,
-  },
-  {
-    id: 8,
-    type: 'system',
-    icon: <Bell className="h-5 w-5 text-rose-500" />,
-    iconBg: 'bg-rose-50',
-    title: 'System update',
-    desc: 'EcoCycle will be undergoing maintenance on 24 Aug 2026 from 12:00 AM to 02:00 AM.',
-    time: '18 Aug 2026, 05:00 PM',
-    unread: false,
-  },
-]
+import { useNotificationFeed } from '../../hooks/useNotificationFeed'
+import Pagination from '../../components/common/Pagination'
+import { timeAgo } from '../../lib/format'
 
 const TABS = [
-  { label: 'All', count: 8 },
-  { label: 'Unread', count: 3 },
-  { label: 'Requests', count: 2 },
-  { label: 'Collections', count: 3 },
-  { label: 'Listings', count: 1 },
-  { label: 'Messages', count: 2 },
+  { label: 'All', key: 'all', filter: {} },
+  { label: 'Unread', key: 'unread', filter: { unread: 'true' } },
+  { label: 'Requests', key: 'request', filter: { type: 'request' } },
+  { label: 'Collections', key: 'collection', filter: { type: 'collection' } },
+  { label: 'Listings', key: 'listing', filter: { type: 'listing' } },
+  { label: 'Messages', key: 'message', filter: { type: 'message' } },
 ]
 
+const ICONS = {
+  request_created: { icon: FileText, bg: 'bg-amber-50', color: 'text-amber-600' },
+  request_cancelled: { icon: Ban, bg: 'bg-slate-100', color: 'text-slate-500' },
+  collection_completed: { icon: CheckCircle2, bg: 'bg-emerald-50', color: 'text-emerald-600' },
+  collection_cancelled: { icon: XCircle, bg: 'bg-red-50', color: 'text-red-500' },
+  collection_scheduled: { icon: Calendar, bg: 'bg-brand-50', color: 'text-brand-600' },
+  listing_submitted: { icon: TrendingUp, bg: 'bg-brand-50', color: 'text-brand-600' },
+  listing_resubmitted: { icon: TrendingUp, bg: 'bg-brand-50', color: 'text-brand-600' },
+  message_received: { icon: MessageSquare, bg: 'bg-blue-50', color: 'text-blue-600' },
+}
+const TYPE_ICONS = {
+  request: { icon: FileText, bg: 'bg-amber-50', color: 'text-amber-600' },
+  collection: { icon: Truck, bg: 'bg-brand-50', color: 'text-brand-600' },
+  listing: { icon: TrendingUp, bg: 'bg-brand-50', color: 'text-brand-600' },
+  message: { icon: MessageSquare, bg: 'bg-blue-50', color: 'text-blue-600' },
+  system: { icon: Bell, bg: 'bg-rose-50', color: 'text-rose-500' },
+}
+
+const ACTIONS = {
+  request: { label: 'View Request', color: 'border-amber-300 text-amber-700 hover:bg-amber-50' },
+  collection: { label: 'View Collection', color: 'border-brand-300 text-brand-700 hover:bg-brand-50' },
+  listing: { label: 'View Listing', color: 'border-brand-300 text-brand-700 hover:bg-brand-50' },
+  message: { label: 'Open Message', color: 'border-blue-300 text-blue-700 hover:bg-blue-50' },
+}
+
 export default function Notifications() {
-  const [activeTab, setActiveTab] = useState('All')
-  const [notifications, setNotifications] = useState(NOTIFICATIONS)
+  const [activeTab, setActiveTab] = useState('all')
+  const tab = TABS.find((t) => t.key === activeTab)
+  const feed = useNotificationFeed(tab.filter)
 
-  const filtered = notifications.filter((n) => {
-    if (activeTab === 'All') return true
-    if (activeTab === 'Unread') return n.unread
-    if (activeTab === 'Requests') return n.type === 'request'
-    if (activeTab === 'Collections') return n.type === 'collection'
-    if (activeTab === 'Listings') return n.type === 'listing'
-    if (activeTab === 'Messages') return n.type === 'message'
-    return true
-  })
-
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })))
+  const changeTab = (key) => {
+    setActiveTab(key)
+    feed.setPage(1)
   }
 
   return (
@@ -157,24 +73,32 @@ export default function Notifications() {
             <p className="mt-1 text-sm text-slate-500">Stay updated about your listings, requests and collections.</p>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={markAllRead} className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-800">
+            <button
+              onClick={feed.markAllRead}
+              disabled={!feed.counts.unread}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-800 disabled:opacity-40"
+            >
               <CheckCheck className="h-4 w-4" />
               Mark all as read
             </button>
-            <button className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50">
+            <Link
+              to="/seller/dashboard/settings"
+              aria-label="Notification settings"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50"
+            >
               <Settings className="h-4.5 w-4.5" />
-            </button>
+            </Link>
           </div>
         </div>
 
         {/* Tabs */}
         <div className="mt-6 flex flex-wrap gap-2 border-b border-slate-200">
-          {TABS.map(({ label, count }) => {
-            const isActive = activeTab === label
+          {TABS.map(({ label, key }) => {
+            const isActive = activeTab === key
             return (
               <button
-                key={label}
-                onClick={() => setActiveTab(label)}
+                key={key}
+                onClick={() => changeTab(key)}
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-all ${
                   isActive ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
@@ -183,80 +107,84 @@ export default function Notifications() {
                 <span className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
                   isActive ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-500'
                 }`}>
-                  {count}
+                  {feed.counts[key] ?? 0}
                 </span>
               </button>
             )
           })}
         </div>
 
+        {(feed.actionError || feed.error) && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            {feed.actionError || feed.error}
+            {feed.error && <button onClick={feed.reload} className="ml-auto font-semibold underline">Retry</button>}
+          </div>
+        )}
+
         {/* Notifications list */}
         <div className="mt-4 space-y-2">
-          {filtered.length === 0 && (
+          {feed.loading && (
+            <div className="flex justify-center py-16">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+            </div>
+          )}
+
+          {!feed.loading && !feed.error && feed.notifications.length === 0 && (
             <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
               <Bell className="mx-auto h-12 w-12 text-slate-300" />
               <p className="mt-3 text-sm font-medium text-slate-500">No notifications found</p>
             </div>
           )}
 
-          {filtered.map((n) => (
-            <div
-              key={n.id}
-              className={`flex items-start gap-4 rounded-2xl border bg-white p-4 shadow-sm transition-colors hover:shadow-md ${
-                n.unread ? 'border-brand-200 bg-brand-50/30' : 'border-slate-200'
-              }`}
-            >
-              {/* Unread dot */}
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-                {n.unread ? (
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-50">
-                    {n.icon}
+          {feed.notifications.map((n) => {
+            const look = ICONS[n.event] || TYPE_ICONS[n.type] || TYPE_ICONS.system
+            const Icon = look.icon
+            const action = ACTIONS[n.type]
+            const unread = !n.read
+            return (
+              <div
+                key={n._id}
+                onClick={() => feed.markRead(n)}
+                className={`flex items-start gap-4 rounded-2xl border bg-white p-4 shadow-sm transition-colors hover:shadow-md ${
+                  unread ? 'border-brand-200 bg-brand-50/30' : 'border-slate-200'
+                }`}
+              >
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+                  <span className={`flex h-10 w-10 items-center justify-center rounded-full ${look.bg}`}>
+                    <Icon className={`h-5 w-5 ${look.color}`} />
                   </span>
-                ) : (
-                  <span className={`flex h-10 w-10 items-center justify-center rounded-full ${n.iconBg}`}>
-                    {n.icon}
-                  </span>
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">{n.title}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">{n.desc}</p>
-                  </div>
-                  <span className="shrink-0 text-[11px] text-slate-400">{n.time}</span>
+                  {unread && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-brand-600" />}
                 </div>
 
-                {/* Meta info */}
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-                  {n.date && (
-                    <span className="flex items-center gap-1 text-brand-600 font-medium">
-                      <Calendar className="h-3 w-3" /> {n.date}
-                      {n.pickupTime && <span>• {n.pickupTime}</span>}
-                    </span>
-                  )}
-                  {n.quantity && (
-                    <span className="flex items-center gap-1 text-slate-600">
-                      {n.quantity}
-                      {n.price && <span>• <span className="text-brand-600 font-medium">{n.price}</span></span>}
-                    </span>
+                {/* Content */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{n.title}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{n.message}</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] text-slate-400">{timeAgo(n.createdAt)}</span>
+                  </div>
+
+                  {/* Action button */}
+                  {action && n.link && (
+                    <div className="mt-3">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); feed.open(n) }}
+                        className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition-colors ${action.color}`}
+                      >
+                        {action.label}
+                      </button>
+                    </div>
                   )}
                 </div>
-
-                {/* Action button */}
-                {n.action && (
-                  <div className="mt-3">
-                    <button className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition-colors ${n.actionColor}`}>
-                      {n.action}
-                    </button>
-                  </div>
-                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
+
+        <Pagination page={feed.page} pages={feed.pages} onChange={feed.setPage} />
 
         {/* Support */}
         <div className="mt-8 flex flex-col items-center gap-4 rounded-2xl border border-brand-200 bg-brand-50/50 p-6 sm:flex-row sm:justify-between">
@@ -269,10 +197,10 @@ export default function Notifications() {
               <p className="mt-0.5 text-xs text-slate-500">Our support team is here to assist you.</p>
             </div>
           </div>
-          <button className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-deeper">
+          <Link to="/contact" className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-deeper">
             <MessageSquare className="h-4 w-4" />
             Contact Support
-          </button>
+          </Link>
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@ import Footer from '../components/sections/Footer'
 
 export default function RootLayout() {
   const { location } = useRouterState({ select: (s) => ({ location: s.location }) })
-  const isDashboard = location.pathname.startsWith('/seller/dashboard')
+  const isDashboard = location.pathname.startsWith('/seller/dashboard') || location.pathname.startsWith('/buyer/dashboard')
 
   return (
     <>

@@ -1,56 +1,35 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
+  AlertCircle,
+  Calendar,
   Clock,
   CheckCircle2,
   XCircle,
+  Mail,
   MapPin,
+  MessageSquare,
   Package,
+  Phone,
   Truck,
   Ban,
   FileText,
 } from 'lucide-react'
+import api from '../../services/api'
+import { useApi } from '../../hooks/useApi'
+import { useSocketEvent } from '../../hooks/useLiveUpdates'
+import { formatDate, scheduleText } from '../../lib/format'
+import { conversationIdFor } from '../../lib/requests'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-
-const DEMO_REQUESTS = [
-  {
-    _id: 'demo-req1',
-    listing: { title: 'PET Plastic Bottles', plasticType: 'PET' },
-    seller: { fullName: 'Krushna Bhagawat', city: 'Pune' },
-    interestedPlasticType: 'PET',
-    quantity: 100,
-    offerPrice: 30,
-    location: 'Pune, Maharashtra',
-    status: 'pending',
-    message: 'Need regular weekly supply.',
-    createdAt: '2026-09-20T10:30:00Z',
-  },
-  {
-    _id: 'demo-req2',
-    listing: { title: 'HDPE Containers', plasticType: 'HDPE' },
-    seller: { fullName: 'Eco Collectors', city: 'Pimpri' },
-    interestedPlasticType: 'HDPE',
-    quantity: 25,
-    offerPrice: 25,
-    location: 'Pimpri, Maharashtra',
-    status: 'accepted',
-    createdAt: '2026-09-18T14:00:00Z',
-  },
-  {
-    _id: 'demo-req3',
-    listing: { title: 'Mixed Plastic Waste', plasticType: 'Mixed' },
-    seller: { fullName: 'Green Roots', city: 'Pune' },
-    interestedPlasticType: 'Mixed',
-    quantity: 30,
-    offerPrice: 20,
-    location: 'Pune, Maharashtra',
-    status: 'completed',
-    createdAt: '2026-09-10T09:00:00Z',
-  },
+const TABS = [
+  { label: 'All', statuses: null },
+  { label: 'Pending', statuses: ['pending'] },
+  { label: 'Accepted', statuses: ['accepted'] },
+  { label: 'Scheduled', statuses: ['scheduled', 'in_progress'] },
+  { label: 'Completed', statuses: ['completed'] },
+  { label: 'Rejected', statuses: ['rejected'] },
+  { label: 'Cancelled', statuses: ['cancelled'] },
 ]
-
-const TABS = ['All', 'Pending', 'Accepted', 'Scheduled', 'Completed', 'Cancelled']
 
 const STATUS_CONFIG = {
   pending: { color: 'bg-amber-50 text-amber-600 border border-amber-200', icon: Clock, label: 'Pending' },
@@ -63,90 +42,42 @@ const STATUS_CONFIG = {
 }
 
 export default function MyRequests() {
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('All')
   const [actionError, setActionError] = useState('')
+  const [actingId, setActingId] = useState(null)
+  const { data, loading, error, reload } = useApi(() => api.getBuyerRequests(), [])
+  const requests = data?.requests || []
 
-  useEffect(() => {
-    const fetchRequests = async () => {
-      const token = localStorage.getItem('sellerToken')
-      try {
-        const headers = token ? { Authorization: 'Bearer ' + token } : {}
-        const res = await fetch(`${API_BASE}/buyer/requests`, { headers })
-        if (res.ok) {
-          const data = await res.json()
-          setRequests(data.requests || [])
-        } else {
-          setRequests(DEMO_REQUESTS)
-        }
-      } catch {
-        setRequests(DEMO_REQUESTS)
-      } finally {
-        setLoading(false)
-      }
+  // Seller decisions and schedule changes arrive as notifications
+  useSocketEvent('notification', (n) => (n.type === 'request' || n.type === 'collection' ? reload() : null))
+
+  const act = async (id, action) => {
+    setActingId(id)
+    setActionError('')
+    try {
+      await action()
+      reload()
+    } catch (err) {
+      setActionError(err.message || 'Action failed')
+    } finally {
+      setActingId(null)
     }
-    fetchRequests()
-  }, [])
+  }
 
-  const handleCancel = async (id) => {
+  const handleCancel = (id) => {
     const reason = window.prompt('Reason for cancellation (optional):')
     if (reason === null) return
-    const token = localStorage.getItem('sellerToken')
-    setActionError('')
-    try {
-      const res = await fetch(`${API_BASE}/buyer/requests/${id}/cancel`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: 'Bearer ' + token }),
-        },
-        body: JSON.stringify({ reason }),
-      })
-      if (res.ok) {
-        setRequests((prev) =>
-          prev.map((r) => (r._id === id ? { ...r, status: 'cancelled', cancellationReason: reason } : r))
-        )
-      } else {
-        const data = await res.json()
-        setActionError(data.message || 'Failed to cancel request')
-      }
-    } catch {
-      setRequests((prev) =>
-        prev.map((r) => (r._id === id ? { ...r, status: 'cancelled', cancellationReason: reason } : r))
-      )
-    }
+    act(id, () => api.cancelBuyerRequest(id, reason.trim() || undefined))
   }
 
-  const handleComplete = async (id) => {
-    const token = localStorage.getItem('sellerToken')
-    setActionError('')
-    try {
-      const res = await fetch(`${API_BASE}/buyer/requests/${id}/complete`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: 'Bearer ' + token }),
-        },
-      })
-      if (res.ok) {
-        setRequests((prev) => prev.map((r) => (r._id === id ? { ...r, status: 'completed' } : r)))
-      } else {
-        const data = await res.json()
-        setActionError(data.message || 'Failed to complete collection')
-      }
-    } catch {
-      setRequests((prev) => prev.map((r) => (r._id === id ? { ...r, status: 'completed' } : r)))
-    }
+  const handleComplete = (id) => {
+    if (!window.confirm('Confirm that this collection is complete?')) return
+    act(id, () => api.completeBuyerCollection(id))
   }
 
-  const filtered = requests.filter((r) => {
-    if (activeTab === 'All') return true
-    return r.status.toLowerCase() === activeTab.toLowerCase()
-  })
-
-  const countFor = (tab) =>
-    tab === 'All' ? requests.length : requests.filter((r) => r.status.toLowerCase() === tab.toLowerCase()).length
+  const tab = TABS.find((t) => t.label === activeTab)
+  const filtered = requests.filter((r) => !tab.statuses || tab.statuses.includes(r.status))
+  const countFor = (t) => (t.statuses ? requests.filter((r) => t.statuses.includes(r.status)).length : requests.length)
 
   return (
     <div className="min-h-full bg-[#f8faf8] p-4 sm:p-6 lg:p-8">
@@ -166,30 +97,40 @@ export default function MyRequests() {
         </div>
 
         {actionError && (
-          <div className="rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600">{actionError}</div>
+          <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {actionError}
+          </div>
         )}
 
         {/* Tabs */}
         <div className="flex flex-wrap gap-2">
-          {TABS.map((tab) => (
+          {TABS.map((t) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={t.label}
+              onClick={() => setActiveTab(t.label)}
               className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                activeTab === tab
+                activeTab === t.label
                   ? 'border border-blue-300 bg-blue-50 text-blue-700'
                   : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
               }`}
             >
-              {tab} ({countFor(tab)})
+              {t.label} ({countFor(t)})
             </button>
           ))}
         </div>
 
         {/* Requests list */}
-        {loading ? (
+        {loading && !data ? (
           <div className="flex items-center justify-center py-20">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center rounded-2xl border border-red-200 bg-red-50 py-12 text-center">
+            <p className="text-sm font-semibold text-red-600">{error}</p>
+            <button onClick={reload} className="mt-3 rounded-xl border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-100">
+              Try again
+            </button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center py-20 text-center">
@@ -202,6 +143,9 @@ export default function MyRequests() {
             {filtered.map((req) => {
               const st = STATUS_CONFIG[req.status] || STATUS_CONFIG.pending
               const StatusIcon = st.icon
+              const seller = req.seller || {}
+              const busy = actingId === req._id
+              const isActive = ['accepted', 'scheduled', 'in_progress'].includes(req.status)
               return (
                 <div key={req._id} className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -221,9 +165,14 @@ export default function MyRequests() {
                           {req.offerPrice && <span>₹{req.offerPrice}/kg</span>}
                         </p>
                         <p className="mt-1 text-[11px] text-slate-400">
-                          Seller: {req.seller?.fullName || 'Verified Seller'} •{' '}
-                          {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : ''}
+                          Seller: {seller.businessName || seller.fullName || 'EcoCycle Seller'} • {formatDate(req.createdAt)}
                         </p>
+                        {(seller.phone || seller.email) && (
+                          <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
+                            {seller.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {seller.phone}</span>}
+                            {seller.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {seller.email}</span>}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -234,32 +183,61 @@ export default function MyRequests() {
                     </span>
                   </div>
 
-                  {req.status === 'cancelled' && req.cancellationReason && (
-                    <div className="mx-5 mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                      <span className="font-semibold">Cancellation reason:</span> {req.cancellationReason}
+                  {req.scheduledDate && (isActive || req.status === 'completed') && (
+                    <div className="mx-5 mb-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-xs text-slate-600">
+                      <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                      <div>
+                        <p className="font-bold text-blue-700">Pickup {req.status === 'completed' ? 'was scheduled' : 'scheduled'}</p>
+                        <p className="mt-0.5">{scheduleText(req)}{req.scheduledLocation && ` at ${req.scheduledLocation}`}</p>
+                        {req.scheduleNote && <p className="mt-0.5 text-slate-500">Note: {req.scheduleNote}</p>}
+                      </div>
                     </div>
                   )}
 
-                  <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
+                  {req.status === 'rejected' && (
+                    <div className="mx-5 mb-4 rounded-xl border border-red-200 bg-red-50/60 p-3 text-xs text-slate-600">
+                      <span className="font-semibold text-red-600">Declined by the seller</span>
+                      {req.rejectionReason && <> — {req.rejectionReason}</>}
+                    </div>
+                  )}
+
+                  {req.status === 'cancelled' && (
+                    <div className="mx-5 mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                      <span className="font-semibold">Cancelled by {req.cancelledBy === 'seller' ? 'the seller' : 'you'}</span>
+                      {req.cancellationReason && <> — {req.cancellationReason}</>}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
+                    <Link
+                      to="/buyer/dashboard/messages"
+                      search={{ c: conversationIdFor(req) }}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-blue-300 hover:text-blue-700"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" /> Message Seller
+                    </Link>
                     {req.status === 'pending' && (
                       <button
                         onClick={() => handleCancel(req._id)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
+                        disabled={busy}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 px-4 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
                       >
                         <Ban className="h-3.5 w-3.5" /> Cancel Request
                       </button>
                     )}
-                    {(req.status === 'accepted' || req.status === 'scheduled' || req.status === 'in_progress') && (
+                    {isActive && (
                       <>
                         <button
                           onClick={() => handleCancel(req._id)}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                          disabled={busy}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
                         >
                           <Ban className="h-3.5 w-3.5" /> Cancel
                         </button>
                         <button
                           onClick={() => handleComplete(req._id)}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+                          disabled={busy}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" /> Mark as Collected
                         </button>
