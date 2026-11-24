@@ -57,6 +57,9 @@ export const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 
 export const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46])
 export const png = (name = 'photo.png') => ({ bytes: PNG_BYTES, type: 'image/png', name })
 
+// A collection date (YYYY-MM-DD) `days` ahead: future in every timezone, so it never goes stale
+export const futureDate = (days = 30) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)
+
 // Insert an approved listing straight into the test database (no approval endpoint exists yet)
 export async function insertApprovedListing(db, sellerId, overrides = {}) {
   const { insertedId } = await db.collection('listings').insertOne({

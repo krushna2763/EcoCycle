@@ -81,6 +81,7 @@ export async function startTestServer({ env: extraEnv = {} } = {}) {
         UPLOAD_DAILY_LIMIT_MB: '50',
         ORPHAN_IMAGE_SWEEP_HOURS: '0',
         ORPHAN_IMAGE_MIN_AGE_HOURS: '24',
+        REQUIRE_LISTING_APPROVAL: 'false',
         ...extraEnv,
         NODE_ENV: 'test',
         PORT: String(apiPort),

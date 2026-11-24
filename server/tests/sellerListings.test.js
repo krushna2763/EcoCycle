@@ -5,6 +5,7 @@ import { createClient, connectTestDb, insertApprovedListing, objectId, png } fro
 
 const LISTING = { title: 'PET bottles', plasticType: 'PET', quantity: 40, pricePerKg: 20, location: 'Pune' }
 
+// Runs with admin review on (REQUIRE_LISTING_APPROVAL=true); listingVisibility.test.js covers the default
 describe('seller listing management', () => {
   let env, db, call, upload, seller, otherSeller, buyer
 
@@ -16,7 +17,7 @@ describe('seller listing management', () => {
   }
 
   before(async () => {
-    env = await startTestServer()
+    env = await startTestServer({ env: { REQUIRE_LISTING_APPROVAL: 'true' } })
     db = await connectTestDb(env.dbUri)
     const client = createClient(env)
     ;({ call, upload } = client)
@@ -48,6 +49,7 @@ describe('seller listing management', () => {
       assert.equal(res.data.total, 4)
       assert.ok(res.data.listings.every((l) => l.seller === seller.id))
       assert.deepEqual(res.data.counts, { all: 4, approved: 1, pending: 1, rejected: 1, sold_out: 1 })
+      assert.equal(res.data.approvalRequired, true)
     })
 
     it('filters by status, sorts and paginates', async () => {
@@ -64,7 +66,7 @@ describe('seller listing management', () => {
 
     it('records a "listing submitted" notification', async () => {
       const res = await call('GET', '/notifications?type=listing', seller.token)
-      assert.ok(res.data.notifications.some((n) => n.event === 'listing_submitted'))
+      assert.ok(res.data.notifications.some((n) => n.event === 'listing_submitted' && n.title === 'Listing submitted for review'))
     })
   })
 

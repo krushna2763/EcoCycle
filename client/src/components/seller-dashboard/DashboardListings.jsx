@@ -2,15 +2,17 @@ import { Link } from '@tanstack/react-router'
 import { Package, MapPin, Eye, PlusCircle } from 'lucide-react'
 import { assetUrl } from '../../services/api'
 import { formatDate } from '../../lib/format'
+import { listingStatusKey } from '../../lib/listings'
 
 const STATUS_STYLES = {
   approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  live: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
   pending: 'bg-amber-50 text-amber-700 border border-amber-200',
   rejected: 'bg-red-50 text-red-700 border border-red-200',
   sold_out: 'bg-slate-50 text-slate-600 border border-slate-200',
 }
 
-const STATUS_LABELS = { approved: 'Approved', pending: 'Pending', rejected: 'Rejected', sold_out: 'Sold Out' }
+const STATUS_LABELS = { approved: 'Approved', live: 'Live', pending: 'Pending', rejected: 'Rejected', sold_out: 'Sold Out' }
 
 const LISTING_GRADIENTS = [
   'from-blue-400 to-cyan-300',
@@ -20,7 +22,7 @@ const LISTING_GRADIENTS = [
 
 const LISTING_EMOJIS = ['🧴', '🫙', '♻️']
 
-export default function DashboardListings({ listings }) {
+export default function DashboardListings({ listings, approvalRequired }) {
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
       {/* Header */}
@@ -44,7 +46,7 @@ export default function DashboardListings({ listings }) {
       {/* Listing cards */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {listings.map((listing, idx) => {
-          const statusKey = listing.status === 'approved' && listing.quantity <= 0 ? 'sold_out' : listing.status
+          const statusKey = listingStatusKey(listing, approvalRequired)
           const cover = assetUrl(listing.image)
           return (
             <Link

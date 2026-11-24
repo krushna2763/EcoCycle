@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,7 +13,6 @@ import {
   Recycle,
   ShieldCheck,
   Store,
-  Upload,
   User,
 } from 'lucide-react'
 import ProgressStepper from '../../components/common/ProgressStepper'
@@ -123,7 +122,6 @@ export default function SellerRegistration() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const navigate = useNavigate()
   const { register } = useAuth()
 
   // Only move to the confirmation step once the account really exists

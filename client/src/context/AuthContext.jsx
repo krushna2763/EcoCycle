@@ -91,6 +91,7 @@ export function AuthProvider({ children }) {
 
   const isBuyer = seller?.role === 'buyer'
   const isSeller = !seller?.role || seller?.role === 'seller'
+  const isAdmin = seller?.role === 'admin'
 
   return (
     <AuthContext.Provider
@@ -101,6 +102,7 @@ export function AuthProvider({ children }) {
         isAuthenticated: !!token && !!seller,
         isBuyer,
         isSeller,
+        isAdmin,
         login,
         register,
         logout,

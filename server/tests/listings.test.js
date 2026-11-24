@@ -5,11 +5,12 @@ import { createClient, connectTestDb, objectId, png } from './helpers/client.js'
 
 const BASE_LISTING = { title: 'T', plasticType: 'PET', quantity: 5, pricePerKg: 5, location: 'Pune' }
 
+// Runs with admin review on (REQUIRE_LISTING_APPROVAL=true); listingVisibility.test.js covers the default
 describe('listing creation, visibility and marketplace queries', () => {
   let env, db, call, upload, seller, otherSeller, buyer, listing
 
   before(async () => {
-    env = await startTestServer()
+    env = await startTestServer({ env: { REQUIRE_LISTING_APPROVAL: 'true' } })
     db = await connectTestDb(env.dbUri)
     const client = createClient(env)
     call = client.call

@@ -7,6 +7,7 @@ import { createServer } from 'http'
 import { Server } from 'socket.io'
 import jwt from 'jsonwebtoken'
 import connectDB from './config/db.js'
+import { checkJwtSecret } from './config/jwtSecret.js'
 import errorHandler from './middleware/errorHandler.js'
 import { authenticateToken } from './middleware/auth.js'
 import { getConversationAccess } from './utils/conversations.js'
@@ -21,8 +22,11 @@ import messageRoutes from './routes/messages.js'
 import settingsRoutes from './routes/settings.js'
 import notificationRoutes from './routes/notifications.js'
 import uploadRoutes from './routes/uploads.js'
+import adminRoutes from './routes/admin.js'
 
 dotenv.config()
+
+if (!checkJwtSecret()) process.exit(1)
 
 const app = express()
 const httpServer = createServer(app)
@@ -80,6 +84,7 @@ app.use('/api/buyer', buyerRoutes)
 app.use('/api/messages', messageRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/uploads', uploadRoutes)
+app.use('/api/admin', adminRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -212,10 +217,13 @@ io.on('connection', (socket) => {
   })
 })
 
+// Outside production the API only listens on this machine (127.0.0.1); production keeps listening
+// on all interfaces. HOST overrides both, e.g. HOST=0.0.0.0 to reach a dev server from the LAN.
 const PORT = process.env.PORT || 5000
-httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-})
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '' : '127.0.0.1')
+const onListening = () => console.log(`Server running on ${HOST || 'all interfaces'}, port ${PORT}`)
+if (HOST) httpServer.listen(PORT, HOST, onListening)
+else httpServer.listen(PORT, onListening)
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

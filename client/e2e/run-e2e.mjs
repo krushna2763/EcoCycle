@@ -34,6 +34,8 @@ const CHROME_CANDIDATES = [
 const STEP_TIMEOUT_MS = 15000
 const PASSWORD = 'Password123!'
 // A valid 1x1 PNG used as the listing photo
+// Collection date 30 days ahead (the API refuses past dates), so the run never goes stale
+const PICKUP_DATE = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
 
 const results = []
@@ -128,6 +130,8 @@ async function main() {
       UPLOAD_DAILY_LIMIT_MB: '50',
       ORPHAN_IMAGE_SWEEP_HOURS: '0',
       ORPHAN_IMAGE_MIN_AGE_HOURS: '24',
+      // No admin review yet: new listings go straight to the marketplace
+      REQUIRE_LISTING_APPROVAL: 'false',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -197,10 +201,13 @@ async function main() {
       el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }))
     }, value)
   const shot = (page, name) => page.screenshot({ path: path.join(artifactsDir, `${name}.png`) })
-  const login = async (page, email) => {
+  // Log in through the login page, using the Seller or Buyer tab
+  const login = async (page, email, role) => {
     await page.goto(`${web}/login`, { waitUntil: 'networkidle2' })
-    await page.type('input[placeholder="Enter your email or phone number"]', email)
-    await page.type('input[placeholder="Enter your password"]', PASSWORD)
+    if (role === 'buyer') await clickText(page, 'button', 'Buyer')
+    await text(page, role === 'buyer' ? 'Login as Buyer' : 'Login as Seller')
+    await page.type('#login-email', email)
+    await page.type('#login-password', PASSWORD)
     await page.click('button[type="submit"]')
   }
 
@@ -208,7 +215,7 @@ async function main() {
   const buyerPage = await openPage('buyer')
 
   await step('seller logs in through the UI', async () => {
-    await login(sellerPage, 'seller@e2e.local')
+    await login(sellerPage, 'seller@e2e.local', 'seller')
     await sellerPage.waitForFunction(() => location.pathname === '/seller/dashboard', { timeout: STEP_TIMEOUT_MS })
     await text(sellerPage, 'Asha Seller')
   })
@@ -228,23 +235,32 @@ async function main() {
     const fileInput = await sellerPage.$('input[type="file"]')
     await fileInput.uploadFile(photoPath)
     await clickText(sellerPage, 'button', 'Publish Listing')
-    await text(sellerPage, 'Listing Submitted!')
+    await text(sellerPage, 'Listing Published!')
+    await text(sellerPage, 'It is now visible to buyers on the marketplace.')
   })
 
-  await step('my listings shows it as pending approval with its photo', async () => {
+  await step('my listings shows it as live with its photo', async () => {
     await sellerPage.goto(`${web}/seller/dashboard/listings`, { waitUntil: 'networkidle2' })
     await text(sellerPage, 'E2E PET Bottles')
-    await text(sellerPage, 'Pending Approval')
+    await sellerPage.waitForSelector('::-p-xpath(//span[normalize-space()="Live"])', { visible: true, timeout: STEP_TIMEOUT_MS })
+      .catch(() => { throw new Error('no "Live" status badge on the listing') })
+    if (await sellerPage.evaluate(() => document.body.innerText.includes('Pending Approval'))) {
+      throw new Error('listing is still shown as waiting for approval')
+    }
     const loaded = await sellerPage.$$eval('img[alt="E2E PET Bottles"]', (imgs) => imgs.some((i) => i.complete && i.naturalWidth > 0))
     if (!loaded) throw new Error('listing photo did not load')
     await shot(sellerPage, '01-my-listings')
   })
 
-  // There is no approval UI yet (Admin phase); approve directly in the throwaway database
-  await conn.collection('listings').updateOne({ title: 'E2E PET Bottles' }, { $set: { status: 'approved' } })
+  await step('the buyer login tab opens from /login?role=buyer', async () => {
+    await buyerPage.goto(`${web}/login?role=buyer`, { waitUntil: 'networkidle2' })
+    await text(buyerPage, 'Login as Buyer')
+    const pressed = await buyerPage.$eval('::-p-xpath(//button[normalize-space()="Buyer"])', (el) => el.getAttribute('aria-pressed'))
+    if (pressed !== 'true') throw new Error('Buyer tab is not selected')
+  })
 
   await step('buyer logs in, finds the listing and sends a request', async () => {
-    await login(buyerPage, 'buyer@e2e.local')
+    await login(buyerPage, 'buyer@e2e.local', 'buyer')
     await buyerPage.waitForFunction(() => location.pathname === '/buyer/dashboard', { timeout: STEP_TIMEOUT_MS })
     await buyerPage.goto(`${web}/buyer/dashboard/listings`, { waitUntil: 'networkidle2' })
     await text(buyerPage, 'E2E PET Bottles')
@@ -279,7 +295,7 @@ async function main() {
   await step('seller schedules the collection', async () => {
     await sellerPage.goto(`${web}/seller/dashboard/collections`, { waitUntil: 'networkidle2' })
     await clickText(sellerPage, 'button', 'Schedule Collection')
-    await setValue(sellerPage, 'input[type="date"]', '2027-01-15')
+    await setValue(sellerPage, 'input[type="date"]', PICKUP_DATE)
     await setValue(sellerPage, 'input[type="time"]', '10:30')
     await setValue(sellerPage, 'input[placeholder="Pickup location"]', 'Warehouse 4, Pune')
     await clickText(sellerPage, 'button', 'Send Schedule')

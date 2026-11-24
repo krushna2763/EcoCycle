@@ -1,6 +1,7 @@
 import Listing from '../models/Listing.js'
 import Request from '../models/Request.js'
 import { notifyRequestTransition } from './notifications.js'
+import { listingApprovalRequired, visibleStatuses } from './listingVisibility.js'
 
 // Request lifecycle, derived from the actions the existing dashboards offer:
 //   pending -> accepted -> scheduled -> in_progress -> completed
@@ -32,13 +33,18 @@ const label = (status) => status.replace('_', ' ')
 // Accepting a request holds its quantity on the listing so it cannot be promised twice
 const reserveQuantity = async (request) => {
   const result = await Listing.updateOne(
-    { _id: request.listing, status: 'approved', quantity: { $gte: request.quantity } },
+    { _id: request.listing, status: { $in: visibleStatuses() }, quantity: { $gte: request.quantity } },
     { $inc: { quantity: -request.quantity } }
   )
   if (result.modifiedCount === 1) return null
 
   const listing = await Listing.findById(request.listing).select('status quantity').lean()
-  if (!listing || listing.status !== 'approved') return 'The listing for this request is not currently approved'
+  if (!listing) return 'The listing for this request no longer exists'
+  if (!visibleStatuses().includes(listing.status)) {
+    return listingApprovalRequired()
+      ? 'The listing for this request is not currently approved'
+      : 'The listing for this request is not currently available'
+  }
   return `Only ${listing.quantity} kg is still available on this listing`
 }
 

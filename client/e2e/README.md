@@ -3,21 +3,22 @@
 `run-e2e.mjs` drives Google Chrome through the whole seller/buyer flow against a private,
 throwaway copy of the app. It never uses the shared Atlas database.
 
-## What it checks (13 steps)
+## What it checks (14 steps)
 
-1. The seller logs in through the login page.
+1. The seller logs in through the login page (Seller tab).
 2. The seller creates a listing with a real photo upload.
-3. My Listings shows the listing as *Pending Approval*, with its photo.
-4. The buyer logs in, finds the listing (approved directly in the test database, since there is no approval UI yet), opens it and sends a request.
-5. The seller gets a live notification badge and accepts the request.
-6. The buyer sees the acceptance.
-7. The seller schedules the collection.
-8. The buyer sees the pickup schedule.
-9. Both users chat. Messages arrive live and exactly once, and are still there after a reload.
-10. The seller starts and completes the collection.
-11. Buyer requests, buyer notifications and seller dashboard show the result. The listing quantity drops from 50 to 20 kg.
-12. Profile and settings changes are saved to the database.
-13. No page errors, console errors or HTTP 5xx responses occurred.
+3. My Listings shows the listing as *Live*, with its photo.
+4. `/login?role=buyer` opens the login page with the Buyer tab selected.
+5. The buyer logs in through the Buyer tab, finds the listing, opens it and sends a request.
+6. The seller gets a live notification badge and accepts the request.
+7. The buyer sees the acceptance.
+8. The seller schedules the collection.
+9. The buyer sees the pickup schedule.
+10. Both users chat. Messages arrive live and exactly once, and are still there after a reload.
+11. The seller starts and completes the collection.
+12. Buyer requests, buyer notifications and seller dashboard show the result. The listing quantity drops from 50 to 20 kg.
+13. Profile and settings changes are saved to the database.
+14. No page errors, console errors or HTTP 5xx responses occurred.
 
 ## Prerequisites
 
@@ -43,7 +44,7 @@ Optional environment variables:
 | `E2E_HEADFUL=1` | Show the browser window while the test runs |
 | `E2E_ARTIFACTS_DIR` | Folder in which to keep screenshots of the key screens |
 
-The run takes about a minute. The script exits with code 0 when all 13 steps pass and 1 otherwise.
+The run takes about a minute. The script exits with code 0 when all 14 steps pass and 1 otherwise.
 
 ## Isolation and safety
 
@@ -52,6 +53,8 @@ The run takes about a minute. The script exits with code 0 when all 13 steps pas
 - It starts the API (`server/index.js`) and the Vite dev server on further free local ports.
 - Every setting the API reads is passed explicitly, so values in `server/.env`, including the
   Atlas connection string, are never used. `client/.env` is overridden the same way.
+- The API runs with `REQUIRE_LISTING_APPROVAL=false` (the default): there is no admin review yet,
+  so a new listing is visible to buyers straight away.
 - The run stops before any test step unless the API reports a `127.0.0.1` database host.
 - Test accounts use `@e2e.local` addresses and exist only in the temporary database.
 

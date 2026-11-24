@@ -25,7 +25,7 @@ export default function BuyerTopNavbar({ onMenuClick, buyer }) {
 
   const handleLogout = () => {
     logout()
-    navigate({ to: '/login' })
+    navigate({ to: '/login', search: { role: 'buyer' } })
   }
 
   return (

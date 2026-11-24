@@ -36,10 +36,21 @@ const STAT_CONFIG = [
   },
 ]
 
-export default function DashboardStats({ stats }) {
+// Without admin review no listing waits for approval, so this card counts requests to answer
+const PENDING_REQUESTS = {
+  key: 'pendingRequests',
+  label: 'Pending',
+  sub: () => 'Requests to answer',
+  icon: Clock,
+  iconBg: 'bg-amber-50',
+  iconColor: 'text-amber-600',
+}
+
+export default function DashboardStats({ stats, approvalRequired }) {
+  const cards = approvalRequired ? STAT_CONFIG : STAT_CONFIG.map((card) => (card.key === 'pending' ? PENDING_REQUESTS : card))
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      {STAT_CONFIG.map(({ key, label, sub, icon: Icon, iconBg, iconColor, suffix }) => (
+      {cards.map(({ key, label, sub, icon: Icon, iconBg, iconColor, suffix }) => (
         <div
           key={key}
           className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"

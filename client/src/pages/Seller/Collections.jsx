@@ -21,7 +21,7 @@ import {
 import api, { assetUrl } from '../../services/api'
 import { useApi } from '../../hooks/useApi'
 import { announceRequestsChanged, useSocketEvent } from '../../hooks/useLiveUpdates'
-import { formatDate, shortId } from '../../lib/format'
+import { formatDate, shortId, todayInputValue } from '../../lib/format'
 import { conversationIdFor, csvCell, isCollection } from '../../lib/requests'
 
 const STATUS_CONFIG = {
@@ -383,7 +383,7 @@ export default function Collections() {
                         <label className="mb-1 block text-xs font-medium text-slate-600">Date</label>
                         <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5">
                           <Calendar className="h-4 w-4 text-slate-400" />
-                          <input type="date" value={scheduleForm.date} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setScheduleForm((p) => ({ ...p, date: e.target.value }))} className="w-full bg-transparent text-sm outline-none" />
+                          <input type="date" value={scheduleForm.date} min={todayInputValue()} onChange={(e) => setScheduleForm((p) => ({ ...p, date: e.target.value }))} className="w-full bg-transparent text-sm outline-none" />
                         </div>
                       </div>
                       <div>

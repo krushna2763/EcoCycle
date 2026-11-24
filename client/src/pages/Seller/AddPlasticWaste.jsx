@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   AlertCircle,
+  AlertTriangle,
   Camera,
   CheckCircle2,
   Eye,
@@ -61,6 +62,10 @@ export default function AddPlasticWaste() {
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  // Whether listings need admin approval before buyers see them (reported by the server)
+  const [approvalRequired, setApprovalRequired] = useState(false)
+  const [listingStatus, setListingStatus] = useState(null)
+  const [rejectionRemarks, setRejectionRemarks] = useState(null)
   const [loadingListing, setLoadingListing] = useState(Boolean(editId))
   const fileInputRef = useRef(null)
   const photosRef = useRef(photos)
@@ -77,8 +82,11 @@ export default function AddPlasticWaste() {
     if (!editId) return
     let cancelled = false
     api.getListing(editId)
-      .then(({ listing }) => {
+      .then(({ listing, approvalRequired: required }) => {
         if (cancelled) return
+        setApprovalRequired(Boolean(required))
+        setListingStatus(listing.status || null)
+        setRejectionRemarks(listing.rejectionRemarks || null)
         setForm({
           title: listing.title || '',
           plasticType: listing.plasticType || '',
@@ -174,9 +182,9 @@ export default function AddPlasticWaste() {
         images,
       }
 
-      if (editId) await api.updateListing(editId, payload)
-      else await api.createListing(payload)
+      const saved = editId ? await api.updateListing(editId, payload) : await api.createListing(payload)
 
+      setApprovalRequired(Boolean(saved.approvalRequired))
       setSuccess(true)
       setTimeout(() => navigate({ to: '/seller/dashboard/listings' }), 2000)
     } catch (error) {
@@ -195,8 +203,16 @@ export default function AddPlasticWaste() {
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <CheckCircle2 className="mx-auto h-16 w-16 text-brand-600" />
-          <h2 className="mt-4 text-xl font-bold text-slate-900">{editId ? 'Listing Updated!' : 'Listing Submitted!'}</h2>
-          <p className="mt-2 text-sm text-slate-500">It will be visible to buyers once it is approved.</p>
+          <h2 className="mt-4 text-xl font-bold text-slate-900">
+            {editId
+              ? (listingStatus === 'rejected' ? 'Listing Resubmitted for Review!' : 'Listing Updated!')
+              : approvalRequired ? 'Listing Submitted!' : 'Listing Published!'}
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            {approvalRequired || listingStatus === 'rejected'
+              ? 'It will be visible to buyers once it is approved by an administrator.'
+              : 'It is now visible to buyers on the marketplace.'}
+          </p>
           <p className="mt-1 text-sm text-slate-500">Redirecting to My Listings...</p>
         </div>
       </div>
@@ -222,13 +238,40 @@ export default function AddPlasticWaste() {
         </nav>
 
         <div className="mt-4">
-          <h1 className="text-2xl font-extrabold text-slate-900 sm:text-3xl">{editId ? 'Edit Listing' : 'Add Plastic Waste'}</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900 sm:text-3xl">
+            {editId ? (listingStatus === 'rejected' ? 'Edit & Resubmit Listing' : 'Edit Listing') : 'Add Plastic Waste'}
+          </h1>
           <p className="mt-1 text-sm text-slate-500">
-            {editId
-              ? 'Saving changes sends the listing back for review before buyers can see it again.'
-              : 'Provide accurate details to help recycling companies find your waste.'}
+            {!editId
+              ? 'Provide accurate details to help recycling companies find your waste.'
+              : listingStatus === 'rejected'
+                ? 'Update the details according to the admin remarks and resubmit for review.'
+                : approvalRequired
+                  ? 'Saving changes sends the listing back for review before buyers can see it again.'
+                  : 'Buyers see your changes as soon as you save them.'}
           </p>
         </div>
+
+        {/* Rejection notice banner if listing was rejected */}
+        {listingStatus === 'rejected' && (
+          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50/90 p-5 text-rose-900 shadow-sm">
+            <div className="flex items-center gap-2 text-sm font-bold text-rose-800">
+              <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0" />
+              <span>This Listing Requires Changes Before Resubmission</span>
+            </div>
+            {rejectionRemarks ? (
+              <div className="mt-2.5 text-xs leading-relaxed text-slate-800 bg-white/90 p-3.5 rounded-xl border border-rose-100">
+                <p className="font-semibold text-rose-950 mb-0.5">Admin review remarks:</p>
+                <p>{rejectionRemarks}</p>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-slate-700">The reviewer marked this listing as rejected. Please check and correct the details below.</p>
+            )}
+            <p className="mt-2 text-xs font-semibold text-emerald-800">
+              💡 Update the required details below and submit again. Your listing will return to the pending moderation queue.
+            </p>
+          </div>
+        )}
 
         {submitError && (
           <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
@@ -383,7 +426,7 @@ export default function AddPlasticWaste() {
               </Link>
               <button onClick={handlePublish} disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-deeper disabled:opacity-50">
                 {submitting ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Send className="h-4 w-4" />}
-                {submitting ? 'Saving...' : editId ? 'Save Changes' : 'Publish Listing'}
+                {submitting ? 'Saving...' : editId ? (listingStatus === 'rejected' ? 'Resubmit for Review' : 'Save Changes') : 'Publish Listing'}
               </button>
             </div>
           </div>

@@ -32,7 +32,7 @@ export default function DashboardRequests({ requests, onAccept, onReject, acting
 
       {requests.length === 0 && (
         <p className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
-          No requests yet. Buyers' requests for your approved listings will appear here.
+          No requests yet. Buyers' requests for your listings will appear here.
         </p>
       )}
 

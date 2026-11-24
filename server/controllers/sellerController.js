@@ -4,6 +4,7 @@ import { transitionRequest, sendTransitionResult, OPEN_STATUSES } from '../utils
 import { deleteUnreferencedImages, ownsAllImages } from '../utils/imageStorage.js'
 import { notifyListingSubmitted } from '../utils/notifications.js'
 import { pageInfo, parsePagination } from '../utils/pagination.js'
+import { listingApprovalRequired, visibleStatuses } from '../utils/listingVisibility.js'
 
 // Listing fields a seller may set when creating or editing a listing
 const LISTING_FIELDS = [
@@ -14,12 +15,16 @@ const LISTING_FIELDS = [
 const REQUEST_STATUSES = ['pending', 'accepted', 'scheduled', 'in_progress', 'completed', 'rejected', 'cancelled']
 const ACTIVE_COLLECTION_STATUSES = ['accepted', 'scheduled', 'in_progress']
 
-// "approved" means live on the marketplace; an approved listing with nothing left is sold out
-const LISTING_FILTERS = {
-  approved: { status: 'approved', quantity: { $gt: 0 } },
-  pending: { status: 'pending' },
-  rejected: { status: 'rejected' },
-  sold_out: { status: 'approved', quantity: { $lte: 0 } },
+// "approved" means live on the marketplace and "sold_out" live with nothing left. Without admin
+// review, unreviewed ("pending") listings are live too (see utils/listingVisibility.js).
+const listingFilters = () => {
+  const live = { status: { $in: visibleStatuses() } }
+  return {
+    approved: { ...live, quantity: { $gt: 0 } },
+    pending: { status: 'pending' },
+    rejected: { status: 'rejected' },
+    sold_out: { ...live, quantity: { $lte: 0 } },
+  }
 }
 
 const LISTING_SORTS = {
@@ -63,16 +68,17 @@ export const getDashboardStats = async (req, res, next) => {
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const count = (model, filter) => model.countDocuments({ seller: sellerId, ...filter })
+    const filters = listingFilters()
 
     const [
       totalListings, activeListings, pendingListings, rejectedListings, soldOutListings,
       totalRequests, pendingRequests, activeCollections, scheduledCollections, completedCollections,
     ] = await Promise.all([
       count(Listing, {}),
-      count(Listing, LISTING_FILTERS.approved),
-      count(Listing, LISTING_FILTERS.pending),
-      count(Listing, LISTING_FILTERS.rejected),
-      count(Listing, LISTING_FILTERS.sold_out),
+      count(Listing, filters.approved),
+      count(Listing, filters.pending),
+      count(Listing, filters.rejected),
+      count(Listing, filters.sold_out),
       count(Request, {}),
       count(Request, { status: 'pending' }),
       count(Request, { status: { $in: ACTIVE_COLLECTION_STATUSES } }),
@@ -100,6 +106,7 @@ export const getDashboardStats = async (req, res, next) => {
 
     res.json({
       success: true,
+      approvalRequired: listingApprovalRequired(),
       stats: {
         totalListings,
         activeListings,
@@ -129,7 +136,8 @@ export const getListings = async (req, res, next) => {
   try {
     const sellerId = req.seller._id
     const status = typeof req.query.status === 'string' ? req.query.status : ''
-    const filter = { seller: sellerId, ...(LISTING_FILTERS[status] || {}) }
+    const filters = listingFilters()
+    const filter = { seller: sellerId, ...(filters[status] || {}) }
     const sort = LISTING_SORTS[req.query.sort] || LISTING_SORTS.newest
     const pagination = parsePagination(req.query)
 
@@ -138,7 +146,7 @@ export const getListings = async (req, res, next) => {
       Listing.countDocuments(filter),
       Promise.all([
         Listing.countDocuments({ seller: sellerId }),
-        ...Object.values(LISTING_FILTERS).map((f) => Listing.countDocuments({ seller: sellerId, ...f })),
+        ...Object.values(filters).map((f) => Listing.countDocuments({ seller: sellerId, ...f })),
       ]),
     ])
 
@@ -148,6 +156,7 @@ export const getListings = async (req, res, next) => {
       listings: await withOpenRequestCounts(listings),
       ...pageInfo(pagination, total),
       counts: { all, approved, pending, rejected, sold_out: soldOut },
+      approvalRequired: listingApprovalRequired(),
     })
   } catch (error) {
     next(error)
@@ -163,13 +172,13 @@ export const getListing = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Listing not found' })
     }
     const [result] = await withOpenRequestCounts([listing])
-    res.json({ success: true, listing: result })
+    res.json({ success: true, listing: result, approvalRequired: listingApprovalRequired() })
   } catch (error) {
     next(error)
   }
 }
 
-// @desc    Create a new listing (starts as pending until approved)
+// @desc    Create a new listing (starts as "pending", i.e. not reviewed yet)
 // @route   POST /api/seller/listings
 export const createListing = async (req, res, next) => {
   try {
@@ -185,13 +194,13 @@ export const createListing = async (req, res, next) => {
       seller: req.seller._id,
     })
     await notifyListingSubmitted(listing)
-    res.status(201).json({ success: true, listing })
+    res.status(201).json({ success: true, listing, approvalRequired: listingApprovalRequired() })
   } catch (error) {
     next(error)
   }
 }
 
-// @desc    Edit a listing; any edit sends it back for review
+// @desc    Edit a listing; any edit marks it as not reviewed again
 // @route   PUT /api/seller/listings/:id
 export const updateListing = async (req, res, next) => {
   try {
@@ -216,12 +225,19 @@ export const updateListing = async (req, res, next) => {
     }
 
     const previousImages = listingImageUrls(listing)
-    listing.set({ ...data, status: 'pending', updatedAt: new Date() })
+    listing.set({
+      ...data,
+      status: 'pending',
+      rejectionRemarks: null,
+      reviewedAt: null,
+      reviewedBy: null,
+      updatedAt: new Date(),
+    })
     await listing.save()
     await deleteUnreferencedImages(previousImages.filter((url) => !images.includes(url)))
     await notifyListingSubmitted(listing, { edited: true })
 
-    res.json({ success: true, listing })
+    res.json({ success: true, listing, approvalRequired: listingApprovalRequired() })
   } catch (error) {
     next(error)
   }

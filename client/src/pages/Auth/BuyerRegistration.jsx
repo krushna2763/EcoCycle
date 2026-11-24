@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
-  Leaf,
   Mail,
   MapPin,
   Phone,
@@ -35,7 +34,6 @@ export default function BuyerRegistration() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const navigate = useNavigate()
   const { register } = useAuth()
 
   const [form, setForm] = useState({
@@ -94,7 +92,7 @@ export default function BuyerRegistration() {
         <Logo />
         <div className="flex items-center gap-2 text-sm">
           <span className="text-slate-500">Already have an account?</span>
-          <Link to="/login" className="rounded-lg border border-blue-600 px-4 py-2 font-semibold text-blue-700 transition-colors hover:bg-blue-50">
+          <Link to="/login" search={{ role: 'buyer' }} className="rounded-lg border border-blue-600 px-4 py-2 font-semibold text-blue-700 transition-colors hover:bg-blue-50">
             Log In
           </Link>
         </div>

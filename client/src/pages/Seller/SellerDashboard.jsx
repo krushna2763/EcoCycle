@@ -16,7 +16,12 @@ const loadDashboard = async () => {
     api.getListings({ limit: 3 }),
     api.getRequests({ limit: 3 }),
   ])
-  return { stats: stats.stats, listings: listings.listings, requests: requests.requests }
+  return {
+    stats: stats.stats,
+    approvalRequired: Boolean(stats.approvalRequired),
+    listings: listings.listings,
+    requests: requests.requests,
+  }
 }
 
 export default function SellerDashboard() {
@@ -71,8 +76,8 @@ export default function SellerDashboard() {
         )}
         {data && (
           <>
-            <DashboardStats stats={data.stats} />
-            <DashboardListings listings={data.listings} />
+            <DashboardStats stats={data.stats} approvalRequired={data.approvalRequired} />
+            <DashboardListings listings={data.listings} approvalRequired={data.approvalRequired} />
             <DashboardRequests
               requests={data.requests}
               onAccept={handleAcceptRequest}

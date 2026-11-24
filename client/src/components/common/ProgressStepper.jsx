@@ -15,7 +15,6 @@ export default function ProgressStepper({ currentStep }) {
         const stepNum = i + 1
         const isCompleted = stepNum < currentStep
         const isActive = stepNum === currentStep
-        const isFuture = stepNum > currentStep
 
         return (
           <div key={step.label} className="flex flex-1 items-center">

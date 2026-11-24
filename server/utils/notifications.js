@@ -2,6 +2,7 @@ import Listing from '../models/Listing.js'
 import Notification from '../models/Notification.js'
 import Settings from '../models/Settings.js'
 import { emitToUser } from './realtime.js'
+import { listingApprovalRequired } from './listingVisibility.js'
 
 // Settings toggle (settings.notifications.<key>) that governs each notification type
 const PREFERENCE_FOR_TYPE = { request: 'requestUpdates', collection: 'collectionUpdates', message: 'messages' }
@@ -47,15 +48,21 @@ export const notify = (userId, data) =>
     return notification
   })
 
-export const notifyListingSubmitted = (listing, { edited = false } = {}) =>
-  notify(listing.seller, {
+export const notifyListingSubmitted = (listing, { edited = false } = {}) => {
+  const review = listingApprovalRequired()
+  return notify(listing.seller, {
     type: 'listing',
     event: edited ? 'listing_resubmitted' : 'listing_submitted',
-    title: edited ? 'Listing updated and sent for review' : 'Listing submitted for review',
-    message: `"${listing.title}" is pending approval and will be visible to buyers once approved.`,
+    title: review
+      ? (edited ? 'Listing updated and sent for review' : 'Listing submitted for review')
+      : (edited ? 'Listing updated' : 'Listing published'),
+    message: review
+      ? `"${listing.title}" is pending approval and will be visible to buyers once approved.`
+      : `"${listing.title}" is now visible to buyers on the marketplace.`,
     link: LINKS.seller.listing,
     listing: listing._id,
   })
+}
 
 export const notifyRequestCreated = (request, listingTitle) =>
   notify(request.seller, {

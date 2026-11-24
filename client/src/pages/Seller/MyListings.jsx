@@ -2,16 +2,19 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   AlertCircle,
+  AlertTriangle,
   Eye,
   MapPin,
   MoreVertical,
   PlusCircle,
   Recycle,
+  RefreshCw,
   Tag,
   Trash2,
 } from 'lucide-react'
 import api, { assetUrl } from '../../services/api'
 import { formatDate } from '../../lib/format'
+import { listingStatusKey } from '../../lib/listings'
 import Pagination from '../../components/common/Pagination'
 import { useApi } from '../../hooks/useApi'
 
@@ -27,6 +30,7 @@ const CARD_COLORS = [
 
 const STATUS_STYLES = {
   approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  live: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
   pending: 'bg-amber-50 text-amber-700 border border-amber-200',
   rejected: 'bg-red-50 text-red-600 border border-red-200',
   sold_out: 'bg-slate-50 text-slate-600 border border-slate-200',
@@ -34,6 +38,7 @@ const STATUS_STYLES = {
 
 const STATUS_LABELS = {
   approved: 'Approved',
+  live: 'Live',
   pending: 'Pending Approval',
   rejected: 'Rejected',
   sold_out: 'Sold Out',
@@ -47,6 +52,14 @@ const FILTER_TABS = [
   { label: 'Sold Out', key: 'sold_out' },
 ]
 
+// Without admin review nothing waits for approval, and the "approved" filter lists live listings
+const LIVE_FILTER_TABS = [
+  { label: 'All', key: 'all' },
+  { label: 'Live', key: 'approved' },
+  { label: 'Rejected', key: 'rejected' },
+  { label: 'Sold Out', key: 'sold_out' },
+]
+
 const SORTS = [
   { label: 'Newest', value: 'newest' },
   { label: 'Oldest', value: 'oldest' },
@@ -54,14 +67,12 @@ const SORTS = [
   { label: 'Price: High to Low', value: 'price_desc' },
 ]
 
-const displayStatus = (listing) => (listing.status === 'approved' && listing.quantity <= 0 ? 'sold_out' : listing.status)
-
-function ListingCard({ listing, index, onDelete, deleting }) {
+function ListingCard({ listing, index, onDelete, deleting, approvalRequired }) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
-  const statusKey = displayStatus(listing)
+  const statusKey = listingStatusKey(listing, approvalRequired)
   const { color, emoji } = CARD_COLORS[index % CARD_COLORS.length]
   const cover = assetUrl(listing.image)
   const gallery = (listing.images || []).map(assetUrl).filter(Boolean)
@@ -150,6 +161,23 @@ function ListingCard({ listing, index, onDelete, deleting }) {
           {/* Description */}
           <p className="mt-2 text-sm leading-relaxed text-slate-500">{listing.description}</p>
 
+          {/* Rejection remarks box */}
+          {listing.status === 'rejected' && (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50/90 p-3.5 text-xs text-rose-900 shadow-sm">
+              <div className="flex items-center gap-1.5 font-bold text-rose-800">
+                <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                <span>Listing Not Approved by Admin</span>
+              </div>
+              {listing.rejectionRemarks ? (
+                <p className="mt-1.5 text-slate-800 leading-relaxed">
+                  <span className="font-semibold text-rose-950">Moderator remarks:</span> {listing.rejectionRemarks}
+                </p>
+              ) : (
+                <p className="mt-1 text-slate-700">Please review your listing details, photos, and pricing, then resubmit for review.</p>
+              )}
+            </div>
+          )}
+
           {listing.openRequestCount > 0 && (
             <p className="mt-2 text-xs font-semibold text-brand-700">
               {listing.openRequestCount} open request{listing.openRequestCount > 1 ? 's' : ''}
@@ -176,12 +204,22 @@ function ListingCard({ listing, index, onDelete, deleting }) {
               >
                 {expanded ? 'Hide Details' : 'View Details'}
               </button>
-              <button
-                onClick={() => navigate({ to: '/seller/dashboard/add-listing', search: { edit: listing._id } })}
-                className="rounded-xl bg-brand-deep px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-deeper"
-              >
-                Edit
-              </button>
+              {listing.status === 'rejected' ? (
+                <button
+                  onClick={() => navigate({ to: '/seller/dashboard/add-listing', search: { edit: listing._id } })}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-amber-600"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Edit & Resubmit
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate({ to: '/seller/dashboard/add-listing', search: { edit: listing._id } })}
+                  className="rounded-xl bg-brand-deep px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-deeper"
+                >
+                  Edit
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -197,7 +235,7 @@ function ListingCard({ listing, index, onDelete, deleting }) {
             <Detail label="Last Updated" value={formatDate(listing.updatedAt)} />
             <Detail label="Additional Info" value={listing.additionalInfo} />
           </div>
-          {listing.status === 'pending' && (
+          {approvalRequired && listing.status === 'pending' && (
             <p className="mt-3 text-xs text-amber-700">This listing is waiting for approval and is not visible to buyers yet.</p>
           )}
           {gallery.length > 0 && (
@@ -234,6 +272,7 @@ export default function MyListings() {
     [activeFilter, sortBy, page]
   )
   const data = result || { listings: [], counts: {}, pages: 1, total: 0 }
+  const approvalRequired = Boolean(data.approvalRequired)
 
   const changeFilter = (key) => {
     setActiveFilter(key)
@@ -283,7 +322,7 @@ export default function MyListings() {
         {/* Filter bar */}
         <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2">
-            {FILTER_TABS.map(({ label, key }) => {
+            {(approvalRequired ? FILTER_TABS : LIVE_FILTER_TABS).map(({ label, key }) => {
               const isActive = activeFilter === key
               return (
                 <button
@@ -348,6 +387,7 @@ export default function MyListings() {
                 index={idx}
                 onDelete={handleDelete}
                 deleting={deletingId === listing._id}
+                approvalRequired={approvalRequired}
               />
             ))}
           </div>

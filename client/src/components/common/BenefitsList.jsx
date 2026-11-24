@@ -1,5 +1,3 @@
-import { CheckCircle2 } from 'lucide-react'
-
 export default function BenefitsList({ benefits }) {
   return (
     <ul className="space-y-4">

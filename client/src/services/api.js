@@ -188,6 +188,31 @@ class ApiService {
     return this.request('PUT', `/buyer/requests/${id}/complete`)
   }
 
+  // Admin
+  getAdminStats() {
+    return this.request('GET', '/admin/dashboard/stats')
+  }
+
+  getPendingListings(params) {
+    return this.request('GET', `/admin/listings${queryString(params)}`)
+  }
+
+  getListingForReview(id) {
+    return this.request('GET', `/admin/listings/${id}`)
+  }
+
+  approveListing(id) {
+    return this.request('PUT', `/admin/listings/${id}/approve`)
+  }
+
+  rejectListing(id, remarks) {
+    return this.request('PUT', `/admin/listings/${id}/reject`, { remarks })
+  }
+
+  getAdminUsers(params) {
+    return this.request('GET', `/admin/users${queryString(params)}`)
+  }
+
   // Settings (role: 'seller' | 'buyer')
   getSettings(role = 'seller') {
     return this.request('GET', `/${role}/settings`)

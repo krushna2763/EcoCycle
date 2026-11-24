@@ -4,12 +4,10 @@ import { applySellerPrivacy } from '../utils/sellerPrivacy.js'
 import { transitionRequest, sendTransitionResult, OPEN_STATUSES } from '../utils/requestStatus.js'
 import { notifyRequestCreated } from '../utils/notifications.js'
 import { pageInfo, parsePagination } from '../utils/pagination.js'
+import { marketplaceFilter } from '../utils/listingVisibility.js'
 
 // Seller profile fields shown on marketplace listings (subject to privacy.profileVisibility)
 const PUBLIC_SELLER_FIELDS = 'fullName businessName city sellerType verificationStatus'
-
-// A listing is on the marketplace when it is approved and still has quantity left
-const AVAILABLE = { status: 'approved', quantity: { $gt: 0 } }
 
 // Query params may arrive as arrays or objects (e.g. ?plasticType[$ne]=x); only plain strings are used
 const queryString = (value, maxLength = 100) => (typeof value === 'string' ? value.trim().slice(0, maxLength) : '')
@@ -39,7 +37,7 @@ export const getBuyerStats = async (req, res, next) => {
       count({ status: 'scheduled' }),
       count({ status: { $in: ['accepted', 'scheduled', 'in_progress'] } }),
       count({ status: 'completed' }),
-      Listing.countDocuments(AVAILABLE),
+      Listing.countDocuments(marketplaceFilter()),
     ])
 
     const totalMaterialsResult = await Request.aggregate([
@@ -78,7 +76,7 @@ export const getMarketplaceListings = async (req, res, next) => {
     const minPrice = parsePrice(req.query.minPrice)
     const maxPrice = parsePrice(req.query.maxPrice)
     const pagination = parsePagination(req.query, { defaultLimit: 12, maxLimit: 50 })
-    const filter = { ...AVAILABLE }
+    const filter = marketplaceFilter()
 
     if (plasticType && plasticType !== 'All') {
       filter.plasticType = plasticType
@@ -132,7 +130,7 @@ export const getMarketplaceListings = async (req, res, next) => {
 export const getListingById = async (req, res, next) => {
   try {
     // Only listings on the marketplace are visible; sellers see their own via /api/seller/listings
-    const listing = await Listing.findOne({ _id: req.params.id, ...AVAILABLE })
+    const listing = await Listing.findOne({ _id: req.params.id, ...marketplaceFilter() })
       .populate('seller', PUBLIC_SELLER_FIELDS)
       .lean()
     if (!listing) {
@@ -160,7 +158,7 @@ export const createBuyRequest = async (req, res, next) => {
   try {
     const { listingId, quantity, offerPrice, location, message } = req.body
 
-    const listing = await Listing.findOne({ _id: listingId, ...AVAILABLE })
+    const listing = await Listing.findOne({ _id: listingId, ...marketplaceFilter() })
     if (!listing) {
       return res.status(404).json({ success: false, message: 'Listing not found' })
     }

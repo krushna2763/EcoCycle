@@ -1,10 +1,12 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { startTestServer } from './helpers/testServer.js'
-import { createClient, connectTestDb, objectId, png } from './helpers/client.js'
+import { createClient, connectTestDb, objectId, png, futureDate } from './helpers/client.js'
 
 // End-to-end buyer-seller flow: listing -> request -> accept -> schedule -> collect,
 // including quantity reservation, duplicate protection and notifications
+// Runs with admin review on (REQUIRE_LISTING_APPROVAL=true), approving the listing in the test database;
+// listingVisibility.test.js covers the default mode, where new listings are visible straight away
 describe('buyer-seller workflow', () => {
   let env, db, call, upload
   let seller, buyer, buyer2, buyer3
@@ -15,7 +17,7 @@ describe('buyer-seller workflow', () => {
   const browseIds = async (user) => (await call('GET', '/buyer/listings', user.token)).data.listings.map((l) => l._id)
 
   before(async () => {
-    env = await startTestServer()
+    env = await startTestServer({ env: { REQUIRE_LISTING_APPROVAL: 'true' } })
     db = await connectTestDb(env.dbUri)
     const client = createClient(env)
     ;({ call, upload } = client)
@@ -117,7 +119,7 @@ describe('buyer-seller workflow', () => {
 
   it('8-9. seller schedules; both sides see the collection details', async () => {
     const res = await call('PUT', `/seller/requests/${requestId}/schedule`, seller.token, {
-      scheduledDate: '2026-11-05', scheduledTime: '10:30', scheduledLocation: 'Warehouse 4, Pune', scheduleNote: 'Gate 2',
+      scheduledDate: futureDate(), scheduledTime: '10:30', scheduledLocation: 'Warehouse 4, Pune', scheduleNote: 'Gate 2',
     })
     assert.equal(res.status, 200)
     const forBuyer = (await call('GET', '/buyer/requests', buyer.token)).data.requests.find((r) => r._id === requestId)

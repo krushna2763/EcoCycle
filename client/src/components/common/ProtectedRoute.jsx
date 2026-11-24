@@ -13,10 +13,26 @@ export default function ProtectedRoute({ children, requiredRole }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    // Open the login tab that matches the dashboard being visited
+    return (
+      <Navigate
+        to="/login"
+        search={
+          requiredRole === 'admin'
+            ? { role: 'admin' }
+            : requiredRole === 'buyer'
+              ? { role: 'buyer' }
+              : {}
+        }
+        replace
+      />
+    )
   }
 
   if (requiredRole && seller?.role && seller.role !== requiredRole) {
+    if (seller.role === 'admin') {
+      return <Navigate to="/admin/dashboard" replace />
+    }
     // If buyer attempts to access seller dashboard, redirect to buyer dashboard
     if (seller.role === 'buyer') {
       return <Navigate to="/buyer/dashboard" replace />

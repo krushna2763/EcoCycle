@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { startTestServer } from './helpers/testServer.js'
-import { createClient, connectTestDb, insertApprovedListing, objectId } from './helpers/client.js'
+import { createClient, connectTestDb, insertApprovedListing, objectId, futureDate } from './helpers/client.js'
 
 describe('request status transitions', () => {
   let env, db, call
@@ -79,7 +79,7 @@ describe('request status transitions', () => {
   describe('seller actions', () => {
     it('must accept or reject a pending request before anything else', async () => {
       const id = await requestIn('pending')
-      assert.equal((await sellerAction(id, 'schedule', { scheduledDate: '2026-11-01' })).status, 409)
+      assert.equal((await sellerAction(id, 'schedule', { scheduledDate: futureDate() })).status, 409)
       for (const status of ['scheduled', 'in_progress', 'completed', 'cancelled']) {
         assert.equal((await setStatus(id, status)).status, 409, status)
       }
@@ -101,12 +101,12 @@ describe('request status transitions', () => {
     it('runs the full collection workflow', async () => {
       const id = await requestIn('pending')
       assert.equal((await sellerAction(id, 'accept')).data.request.status, 'accepted')
-      const scheduled = await sellerAction(id, 'schedule', { scheduledDate: '2026-11-01', scheduledTime: '10:00 AM', scheduledLocation: 'Warehouse' })
+      const scheduled = await sellerAction(id, 'schedule', { scheduledDate: futureDate(), scheduledTime: '10:00 AM', scheduledLocation: 'Warehouse' })
       assert.equal(scheduled.data.request.status, 'scheduled')
       assert.equal(scheduled.data.request.scheduledLocation, 'Warehouse')
-      const rescheduled = await sellerAction(id, 'schedule', { scheduledDate: '2026-11-02' })
+      const rescheduled = await sellerAction(id, 'schedule', { scheduledDate: futureDate(31) })
       assert.equal(rescheduled.status, 200)
-      assert.equal(rescheduled.data.request.scheduledDate, '2026-11-02')
+      assert.equal(rescheduled.data.request.scheduledDate, futureDate(31))
       assert.equal(rescheduled.data.request.scheduledLocation, 'Warehouse')
       assert.equal((await setStatus(id, 'in_progress')).data.request.status, 'in_progress')
       assert.equal((await setStatus(id, 'completed')).data.request.status, 'completed')
@@ -122,7 +122,7 @@ describe('request status transitions', () => {
       it(`cannot change a ${status} request`, async () => {
         const id = await requestIn(status)
         assert.equal((await sellerAction(id, 'accept')).status, 409)
-        assert.equal((await sellerAction(id, 'schedule', { scheduledDate: '2026-11-01' })).status, 409)
+        assert.equal((await sellerAction(id, 'schedule', { scheduledDate: futureDate() })).status, 409)
         for (const target of ['accepted', 'in_progress', 'completed', 'cancelled']) {
           if (target !== status) assert.equal((await setStatus(id, target)).status, 409, target)
         }

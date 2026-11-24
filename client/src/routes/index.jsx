@@ -1,38 +1,44 @@
-import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent } from '@tanstack/react-router'
 import RootLayout from './RootLayout'
 import DashboardLayout from './DashboardLayout'
 import BuyerDashboardLayout from './BuyerDashboardLayout'
-import Home from '../pages/Home/Home'
-import About from '../pages/About/About'
-import HowItWorks from '../pages/HowItWorks/HowItWorks'
-import Categories from '../pages/Categories/Categories'
-import Impact from '../pages/Impact/Impact'
-import Contact from '../pages/Contact/Contact'
-import Login from '../pages/Auth/Login'
-import Signup from '../pages/Auth/Signup'
-import SellerRegistration from '../pages/Auth/SellerRegistration'
-import BuyerRegistration from '../pages/Auth/BuyerRegistration'
-import SellerDashboard from '../pages/Seller/SellerDashboard'
-import MyListings from '../pages/Seller/MyListings'
-import AddPlasticWaste from '../pages/Seller/AddPlasticWaste'
-import Requests from '../pages/Seller/Requests'
-import Collections from '../pages/Seller/Collections'
-import Messages from '../pages/Seller/Messages'
-import Profile from '../pages/Seller/Profile'
-import Settings from '../pages/Seller/Settings'
-import Notifications from '../pages/Seller/Notifications'
+import AdminDashboardLayout from './AdminDashboardLayout'
+import PageLoading from '../components/common/PageLoading'
 
-// Buyer pages
-import BuyerDashboard from '../pages/Buyer/BuyerDashboard'
-import BrowseListings from '../pages/Buyer/BrowseListings'
-import ListingDetails from '../pages/Buyer/ListingDetails'
-import MyRequests from '../pages/Buyer/MyRequests'
-import BuyerCollections from '../pages/Buyer/BuyerCollections'
-import BuyerProfile from '../pages/Buyer/BuyerProfile'
-import BuyerSettings from '../pages/Buyer/BuyerSettings'
-import BuyerNotifications from '../pages/Buyer/BuyerNotifications'
-
-import NotFound from '../pages/NotFound'
+// Pages are loaded on demand, one chunk per page; the layouts (navbar, sidebars, route guards)
+// stay in the main bundle
+const Home = lazyRouteComponent(() => import('../pages/Home/Home'))
+const About = lazyRouteComponent(() => import('../pages/About/About'))
+const HowItWorks = lazyRouteComponent(() => import('../pages/HowItWorks/HowItWorks'))
+const Categories = lazyRouteComponent(() => import('../pages/Categories/Categories'))
+const Impact = lazyRouteComponent(() => import('../pages/Impact/Impact'))
+const Contact = lazyRouteComponent(() => import('../pages/Contact/Contact'))
+const Login = lazyRouteComponent(() => import('../pages/Auth/Login'))
+const Signup = lazyRouteComponent(() => import('../pages/Auth/Signup'))
+const SellerRegistration = lazyRouteComponent(() => import('../pages/Auth/SellerRegistration'))
+const BuyerRegistration = lazyRouteComponent(() => import('../pages/Auth/BuyerRegistration'))
+const SellerDashboard = lazyRouteComponent(() => import('../pages/Seller/SellerDashboard'))
+const MyListings = lazyRouteComponent(() => import('../pages/Seller/MyListings'))
+const AddPlasticWaste = lazyRouteComponent(() => import('../pages/Seller/AddPlasticWaste'))
+const Requests = lazyRouteComponent(() => import('../pages/Seller/Requests'))
+const Collections = lazyRouteComponent(() => import('../pages/Seller/Collections'))
+const Messages = lazyRouteComponent(() => import('../pages/Seller/Messages'))
+const Profile = lazyRouteComponent(() => import('../pages/Seller/Profile'))
+const Settings = lazyRouteComponent(() => import('../pages/Seller/Settings'))
+const Notifications = lazyRouteComponent(() => import('../pages/Seller/Notifications'))
+const BuyerDashboard = lazyRouteComponent(() => import('../pages/Buyer/BuyerDashboard'))
+const BrowseListings = lazyRouteComponent(() => import('../pages/Buyer/BrowseListings'))
+const ListingDetails = lazyRouteComponent(() => import('../pages/Buyer/ListingDetails'))
+const MyRequests = lazyRouteComponent(() => import('../pages/Buyer/MyRequests'))
+const BuyerCollections = lazyRouteComponent(() => import('../pages/Buyer/BuyerCollections'))
+const BuyerProfile = lazyRouteComponent(() => import('../pages/Buyer/BuyerProfile'))
+const BuyerSettings = lazyRouteComponent(() => import('../pages/Buyer/BuyerSettings'))
+const BuyerNotifications = lazyRouteComponent(() => import('../pages/Buyer/BuyerNotifications'))
+const AdminDashboard = lazyRouteComponent(() => import('../pages/Admin/AdminDashboard'))
+const PendingListings = lazyRouteComponent(() => import('../pages/Admin/PendingListings'))
+const ReviewListing = lazyRouteComponent(() => import('../pages/Admin/ReviewListing'))
+const AdminUsers = lazyRouteComponent(() => import('../pages/Admin/AdminUsers'))
+const NotFound = lazyRouteComponent(() => import('../pages/NotFound'))
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -224,6 +230,37 @@ const buyerNotificationsRoute = createRoute({
   component: BuyerNotifications,
 })
 
+// ── Admin Dashboard Layout & Subroutes ──
+const adminDashboardLayoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'admin-dashboard',
+  component: AdminDashboardLayout,
+})
+
+const adminDashboardRoute = createRoute({
+  getParentRoute: () => adminDashboardLayoutRoute,
+  path: '/admin/dashboard',
+  component: AdminDashboard,
+})
+
+const adminPendingListingsRoute = createRoute({
+  getParentRoute: () => adminDashboardLayoutRoute,
+  path: '/admin/dashboard/listings',
+  component: PendingListings,
+})
+
+const adminReviewListingRoute = createRoute({
+  getParentRoute: () => adminDashboardLayoutRoute,
+  path: '/admin/dashboard/listings/$id',
+  component: ReviewListing,
+})
+
+const adminUsersRoute = createRoute({
+  getParentRoute: () => adminDashboardLayoutRoute,
+  path: '/admin/dashboard/users',
+  component: AdminUsers,
+})
+
 
 const routeTree = rootRoute.addChildren([
   homeRoute,
@@ -258,7 +295,13 @@ const routeTree = rootRoute.addChildren([
     buyerProfileRoute,
     buyerSettingsRoute,
   ]),
+  adminDashboardLayoutRoute.addChildren([
+    adminDashboardRoute,
+    adminPendingListingsRoute,
+    adminReviewListingRoute,
+    adminUsersRoute,
+  ]),
   notFoundRoute,
 ])
 
-export const router = createRouter({ routeTree })
+export const router = createRouter({ routeTree, defaultPendingComponent: PageLoading })
