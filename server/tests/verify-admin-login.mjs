@@ -30,7 +30,7 @@ async function runVerification() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email: adminEmail,
-      password: process.env.ADMIN_PASSWORD || 'Admin@123456',
+      password: process.env.ADMIN_PASSWORD,
     }),
   })
   const adminData = await adminRes.json()

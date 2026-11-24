@@ -1,5 +1,13 @@
 import puppeteer from 'puppeteer-core'
+import dotenv from 'dotenv'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.resolve(__dirname, '../../server/.env') })
+
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@example.com').toLowerCase().trim()
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || ''
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 const BASE_URL = 'http://localhost:5173'
 
@@ -52,8 +60,8 @@ async function runBrowserVerification() {
     // ── Check 2: Admin Login & Dashboard Navigation ──
     console.log('\n[Check 2] Logging into Admin Portal...')
     await page.goto(`${BASE_URL}/login?role=admin`, { waitUntil: 'networkidle0' })
-    await page.type('#login-email', 'admin@ecocycle.com')
-    await page.type('#login-password', 'Admin@123456')
+    await page.type('#login-email', ADMIN_EMAIL)
+    await page.type('#login-password', ADMIN_PASSWORD)
     await page.click('button[type="submit"]')
 
     await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 })
